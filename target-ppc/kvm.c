@@ -1765,6 +1765,18 @@ bool kvmppc_has_cap_htab_fd(void)
     return cap_htab_fd;
 }
 
+static PowerPCCPUClass *ppc_cpu_get_family_class(PowerPCCPUClass *pcc)
+{
+    ObjectClass *oc = OBJECT_CLASS(pcc);
+
+    while (oc && !object_class_is_abstract(oc)) {
+        oc = object_class_get_parent(oc);
+    }
+    assert(oc);
+
+    return POWERPC_CPU_CLASS(oc);
+}
+
 static int kvm_ppc_register_host_cpu_type(void)
 {
     TypeInfo type_info = {
@@ -1774,6 +1786,7 @@ static int kvm_ppc_register_host_cpu_type(void)
     };
     uint32_t host_pvr = mfpvr();
     PowerPCCPUClass *pvr_pcc;
+    DeviceClass *dc;
 
     pvr_pcc = ppc_cpu_class_by_pvr(host_pvr);
     if (pvr_pcc == NULL) {
@@ -1784,6 +1797,14 @@ static int kvm_ppc_register_host_cpu_type(void)
     }
     type_info.parent = object_class_get_name(OBJECT_CLASS(pvr_pcc));
     type_register(&type_info);
+
+    /* Register generic family CPU class for a family */
+    pvr_pcc = ppc_cpu_get_family_class(pvr_pcc);
+    dc = DEVICE_CLASS(pvr_pcc);
+    type_info.parent = object_class_get_name(OBJECT_CLASS(pvr_pcc));
+    type_info.name = g_strdup_printf("%s-"TYPE_POWERPC_CPU, dc->desc);
+    type_register(&type_info);
+
     return 0;
 }
 
