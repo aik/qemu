@@ -654,4 +654,6 @@ DEF_HELPER_3(drsp, void, env, fprp, fprp)
 DEF_HELPER_3(drdpq, void, env, fprp, fprp)
 DEF_HELPER_3(dcffix, void, env, fprp, fprp)
 DEF_HELPER_3(dcffixq, void, env, fprp, fprp)
+DEF_HELPER_3(dctfix, void, env, fprp, fprp)
+DEF_HELPER_3(dctfixq, void, env, fprp, fprp)
 #include "exec/def-helper.h"
