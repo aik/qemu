@@ -642,4 +642,6 @@ DEF_HELPER_5(dquai, void, env, fprp, fprp, i32, i32)
 DEF_HELPER_5(dquaiq, void, env, fprp, fprp, i32, i32)
 DEF_HELPER_5(dqua, void, env, fprp, fprp, fprp, i32)
 DEF_HELPER_5(dquaq, void, env, fprp, fprp, fprp, i32)
+DEF_HELPER_5(drrnd, void, env, fprp, fprp, fprp, i32)
+DEF_HELPER_5(drrndq, void, env, fprp, fprp, fprp, i32)
 #include "exec/def-helper.h"
