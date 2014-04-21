@@ -658,4 +658,6 @@ DEF_HELPER_3(dctfix, void, env, fprp, fprp)
 DEF_HELPER_3(dctfixq, void, env, fprp, fprp)
 DEF_HELPER_4(ddedpd, void, env, fprp, fprp, i32)
 DEF_HELPER_4(ddedpdq, void, env, fprp, fprp, i32)
+DEF_HELPER_4(denbcd, void, env, fprp, fprp, i32)
+DEF_HELPER_4(denbcdq, void, env, fprp, fprp, i32)
 #include "exec/def-helper.h"
