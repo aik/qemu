@@ -624,4 +624,6 @@ DEF_HELPER_4(dsub, void, env, fprp, fprp, fprp)
 DEF_HELPER_4(dsubq, void, env, fprp, fprp, fprp)
 DEF_HELPER_4(dmul, void, env, fprp, fprp, fprp)
 DEF_HELPER_4(dmulq, void, env, fprp, fprp, fprp)
+DEF_HELPER_4(ddiv, void, env, fprp, fprp, fprp)
+DEF_HELPER_4(ddivq, void, env, fprp, fprp, fprp)
 #include "exec/def-helper.h"
