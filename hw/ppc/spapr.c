@@ -817,7 +817,7 @@ static int spapr_vga_init(PCIBus *pci_bus)
 
 static const VMStateDescription vmstate_spapr = {
     .name = "spapr",
-    .version_id = 1,
+    .version_id = 2,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
     .fields      = (VMStateField []) {
@@ -825,7 +825,7 @@ static const VMStateDescription vmstate_spapr = {
 
         /* RTC offset */
         VMSTATE_UINT64(rtc_offset, sPAPREnvironment),
-
+        VMSTATE_PPC_TIMEBASE_V(tb, sPAPREnvironment, 2),
         VMSTATE_END_OF_LIST()
     },
 };
