@@ -7414,6 +7414,11 @@ static void gen_spr_book3s_dbg(CPUPPCState *env)
                      SPR_NOACCESS, SPR_NOACCESS,
                      &spr_read_generic, &spr_write_generic,
                      KVM_REG_PPC_DABR, 0x00000000);
+
+    spr_register_kvm(env, SPR_DABRX, "DABRX",
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     KVM_REG_PPC_DABRX, 0x00000000);
 }
 
 static void gen_spr_970_dbg(CPUPPCState *env)
@@ -7793,7 +7798,6 @@ static void init_proc_book3s_64(CPUPPCState *env, int version)
     gen_spr_book3s_altivec(env);
     gen_spr_book3s_pmu_hypv(env);
     gen_spr_book3s_pmu_user(env);
-    gen_spr_book3s_dbg(env);
 
     switch (version) {
     case BOOK3S_CPU_970:
@@ -7832,6 +7836,9 @@ static void init_proc_book3s_64(CPUPPCState *env, int version)
         gen_spr_power8_fscr(env);
         gen_spr_power8_tm(env);
         gen_spr_power8_pmu(env);
+    }
+    if (version < BOOK3S_CPU_POWER8) {
+        gen_spr_book3s_dbg(env);
     }
 #if !defined(CONFIG_USER_ONLY)
     switch (version) {

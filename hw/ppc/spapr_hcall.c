@@ -926,6 +926,30 @@ static target_ulong h_client_architecture_support(PowerPCCPU *cpu_,
     return H_SUCCESS;
 }
 
+static target_ulong h_set_xdabr(PowerPCCPU *cpu, sPAPREnvironment *spapr,
+                                target_ulong opcode, target_ulong *args)
+{
+    CPUState *cs;
+    target_ulong ret = H_SUCCESS;
+    target_ulong value = args[0];
+    target_ulong extended = args[1];
+
+#define PRIVM_MASK      0x3UL /* Bits 62-63 */
+    if (extended & ~PRIVM_MASK) {
+        ret = H_PARAMETER;
+    } else {
+        CPU_FOREACH(cs) {
+            PowerPCCPU *cpu = POWERPC_CPU(cs);
+            set_spr(cs, SPR_DABR, value, 0);
+            if (cpu->env.spr_cb[SPR_DABRX].oea_read) {
+                set_spr(cs, SPR_DABRX, extended, 0);
+            }
+        }
+    }
+
+    return ret;
+}
+
 static spapr_hcall_fn papr_hypercall_table[(MAX_HCALL_OPCODE / 4) + 1];
 static spapr_hcall_fn kvmppc_hypercall_table[KVMPPC_HCALL_MAX - KVMPPC_HCALL_BASE + 1];
 
@@ -1008,6 +1032,7 @@ static void hypercall_register_types(void)
 
     /* ibm,client-architecture-support support */
     spapr_register_hypercall(KVMPPC_H_CAS, h_client_architecture_support);
+    spapr_register_hypercall(H_SET_XDABR, h_set_xdabr);
 }
 
 type_init(hypercall_register_types)
