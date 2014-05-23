@@ -7551,7 +7551,6 @@ POWERPC_FAMILY(970)(ObjectClass *oc, void *data)
                        PPC_64B | PPC_ALTIVEC |
                        PPC_SEGMENT_64B | PPC_SLBI;
     pcc->msr_mask = (1ull << MSR_SF) |
-                    (1ull << MSR_SHV) |
                     (1ull << MSR_VR) |
                     (1ull << MSR_POW) |
                     (1ull << MSR_EE) |
