@@ -7398,10 +7398,10 @@ static void gen_spr_book3s_altivec(CPUPPCState *env)
         return;
     }
 
-    spr_register(env, SPR_VRSAVE, "SPR_VRSAVE",
-                 &spr_read_generic, &spr_write_generic,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+    spr_register_kvm(env, SPR_VRSAVE, "VRSAVE",
+                     &spr_read_generic, &spr_write_generic,
+                     &spr_read_generic, &spr_write_generic,
+                     KVM_REG_PPC_VRSAVE, 0x00000000);
 
     /* Can't find information on what this should be on reset.  This
      * value is the one used by 74xx processors. */
@@ -7660,10 +7660,10 @@ static void gen_spr_book3s_common(CPUPPCState *env)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, SPR_NOACCESS,
                  0x80800000);
-    spr_register(env, SPR_PPR, "PPR",
-                 &spr_read_generic, &spr_write_generic,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+    spr_register_kvm(env, SPR_PPR, "PPR",
+                     &spr_read_generic, &spr_write_generic,
+                     &spr_read_generic, &spr_write_generic,
+                     KVM_REG_PPC_PPR, 0x00000000);
 }
 
 static void gen_spr_power6_pcr(CPUPPCState *env)
