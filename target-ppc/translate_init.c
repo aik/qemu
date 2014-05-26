@@ -7505,6 +7505,11 @@ static void gen_spr_book3s_ids(CPUPPCState *env)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_pir,
                  0x00000000);
+
+    spr_register(env, SPR_TIR, "TIR",
+                 &spr_read_generic, SPR_NOACCESS,
+                 &spr_read_generic, SPR_NOACCESS,
+                 0x00000000);
 }
 
 static void gen_spr_book3s_purr(CPUPPCState *env)
