@@ -7442,6 +7442,26 @@ static void gen_spr_book3s_pmu_user(CPUPPCState *env)
                  0x00000000);
 }
 
+static void gen_spr_970_pmu(CPUPPCState *env)
+{
+    spr_register(env, SPR_970_PMC7, "PMC7",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
+    spr_register(env, SPR_970_PMC8, "PMC8",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
+    spr_register(env, SPR_970_UPMC7, "UPMC7",
+                 &spr_read_ureg, SPR_NOACCESS,
+                 &spr_read_ureg, SPR_NOACCESS,
+                 0x00000000);
+    spr_register(env, SPR_970_UPMC8, "UPMC8",
+                 &spr_read_ureg, SPR_NOACCESS,
+                 &spr_read_ureg, SPR_NOACCESS,
+                 0x00000000);
+}
+
 static void gen_spr_book3s_external_control(CPUPPCState *env)
 {
     /* External access control */
@@ -7464,6 +7484,7 @@ static void init_proc_970 (CPUPPCState *env)
     gen_spr_970_hior(env);
     gen_low_BATs(env);
     gen_spr_970_ctrl(env);
+    gen_spr_970_pmu(env);
 
     gen_spr_book3s_external_control(env);
 
