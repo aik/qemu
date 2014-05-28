@@ -7801,14 +7801,10 @@ static void init_proc_POWER7 (CPUPPCState *env)
     gen_spr_book3s_ids(env);
     gen_spr_book3s_purr(env);
     gen_spr_book3s_common(env);
+    gen_spr_book3s_lpar(env);
     gen_spr_power6_pcr(env);
     gen_spr_power6_dbg(env);
     gen_spr_amr(env);
-    /* Logical partitionning */
-    spr_register_kvm(env, SPR_LPCR, "LPCR",
-                     SPR_NOACCESS, SPR_NOACCESS,
-                     &spr_read_generic, &spr_write_generic,
-                     KVM_REG_PPC_LPCR, 0x00000000);
 #if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
