@@ -175,6 +175,13 @@ static void spr_read_ureg (void *opaque, int gprn, int sprn)
     gen_load_spr(cpu_gpr[gprn], sprn + 0x10);
 }
 
+#if defined(TARGET_PPC64)
+static void spr_write_ureg (void *opaque, int sprn, int gprn)
+{
+    gen_store_spr(sprn + 0x10, cpu_gpr[gprn]);
+}
+#endif
+
 /* SPR common to all non-embedded PowerPC */
 /* DECR */
 #if !defined(CONFIG_USER_ONLY)
@@ -7582,6 +7589,22 @@ static void gen_spr_power6_dbg(CPUPPCState *env)
 #endif
 }
 
+static void gen_spr_power8_pmu(CPUPPCState *env)
+{
+    spr_register_kvm(env, SPR_POWER_MMCR2, "MMCR2",
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     &spr_read_generic, &spr_write_generic,
+                     KVM_REG_PPC_MMCR2, 0x00000000);
+    spr_register(env, SPR_POWER_UMMCR2, "UMMCR2",
+                 &spr_read_ureg, &spr_write_ureg,
+                 &spr_read_ureg, &spr_write_ureg,
+                 0x00000000);
+    spr_register_kvm(env, SPR_POWER_MMCRS, "MMCRS",
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     &spr_read_generic, &spr_write_generic,
+                     KVM_REG_PPC_MMCRS, 0x00000000);
+}
+
 static void gen_spr_book3s_common(CPUPPCState *env)
 {
 #if !defined(CONFIG_USER_ONLY)
@@ -7667,6 +7690,7 @@ static void init_proc_book3s_64(CPUPPCState *env, int version)
     if (version >= BOOK3S_CPU_POWER8) {
         gen_spr_power8_tce_address_control(env);
         gen_spr_power8_fscr(env);
+        gen_spr_power8_pmu(env);
     }
 #if !defined(CONFIG_USER_ONLY)
     switch (version) {
