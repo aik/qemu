@@ -4236,6 +4236,7 @@ static inline void gen_op_mfspr(DisasContext *ctx)
                  TARGET_FMT_lx "\n", sprn, sprn, ctx->nip - 4);
         printf("Trying to read invalid spr %d (0x%03x) at "
                TARGET_FMT_lx "\n", sprn, sprn, ctx->nip - 4);
+        printf("mem_idx = %d\n", ctx->mem_idx);
         gen_inval_exception(ctx, POWERPC_EXCP_INVAL_SPR);
     }
 }
@@ -11491,6 +11492,8 @@ GEN_SPEOP_LDST(evstwwo, 0x1E, 2),
 void ppc_cpu_dump_state(CPUState *cs, FILE *f, fprintf_function cpu_fprintf,
                         int flags)
 {
+    printf("KKKK=%d\n", kkkk);
+
 #define RGPL  4
 #define RFPL  4
 

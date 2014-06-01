@@ -21,30 +21,34 @@
 
 #include "helper_regs.h"
 
+#define qemu_log printf
+
 /*****************************************************************************/
 /* SPR accesses */
 void helper_load_dump_spr(CPUPPCState *env, uint32_t sprn)
 {
-    qemu_log("Read SPR %d %03x => " TARGET_FMT_lx "\n", sprn, sprn,
+    qemu_log("***** Read SPR %d %03x => " TARGET_FMT_lx "\n", sprn, sprn,
              env->spr[sprn]);
 }
 
 void helper_store_dump_spr(CPUPPCState *env, uint32_t sprn)
 {
-    qemu_log("Write SPR %d %03x <= " TARGET_FMT_lx "\n", sprn, sprn,
+    qemu_log("***** Write SPR %d %03x <= " TARGET_FMT_lx "\n", sprn, sprn,
              env->spr[sprn]);
 }
 
 void helper_tb_flush(CPUPPCState *env)
 {
+//    printf("#### TRY %s:%u\n", __func__, __LINE__);
     tb_flush(env);
+//    printf("#### END %s:%u\n", __func__, __LINE__);
 }
 
 #ifdef TARGET_PPC64
 static void raise_fu_exception(CPUPPCState *env, uint32_t bit,
                                uint32_t sprn, uint32_t cause)
 {
-    qemu_log("Facility SPR %d is unavailable (SPR FSCR:%d)\n", sprn, bit);
+    qemu_log("**** Facility SPR %d is unavailable (SPR FSCR:%d) msr=%lx\n", sprn, bit, env->msr);
 
     env->spr[SPR_FSCR] &= ~((target_ulong)FSCR_IC_MASK << FSCR_IC_POS);
     cause &= FSCR_IC_MASK;
@@ -70,7 +74,8 @@ void helper_msr_facility_check(CPUPPCState *env, uint32_t bit,
                                uint32_t sprn, uint32_t cause)
 {
 #ifdef TARGET_PPC64
-    if (env->msr & (1 << bit)) {
+//    printf("check MSR  %lx  bit %d  "
+    if (env->msr & (1ULL << bit)) {
         /* Facility is enabled, continue */
         return;
     }

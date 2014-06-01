@@ -32,8 +32,8 @@
 #include "hw/qdev-properties.h"
 
 //#define PPC_DUMP_CPU
-//#define PPC_DEBUG_SPR
-//#define PPC_DUMP_SPR_ACCESSES
+#define PPC_DEBUG_SPR
+#define PPC_DUMP_SPR_ACCESSES
 
 /* For user-mode emulation, we don't emulate any IRQ controller */
 #if defined(CONFIG_USER_ONLY)
@@ -55,12 +55,17 @@ PPC_IRQ_INIT_FN(e500);
 /* Generic callbacks:
  * do nothing but store/retrieve spr value
  */
+
+#define K_LIMIT     1450000000
+int kkkk;
 static void spr_load_dump_spr(int sprn)
 {
-#ifdef PPC_DUMP_SPR_ACCESSES
+#if 1//def PPC_DUMP_SPR_ACCESSES
+    if (kkkk > K_LIMIT) {
     TCGv_i32 t0 = tcg_const_i32(sprn);
     gen_helper_load_dump_spr(cpu_env, t0);
     tcg_temp_free_i32(t0);
+    }
 #endif
 }
 
@@ -72,10 +77,13 @@ static void spr_read_generic (void *opaque, int gprn, int sprn)
 
 static void spr_store_dump_spr(int sprn)
 {
-#ifdef PPC_DUMP_SPR_ACCESSES
+#if 1//def PPC_DUMP_SPR_ACCESSES
+    if (kkkk > K_LIMIT) {
     TCGv_i32 t0 = tcg_const_i32(sprn);
     gen_helper_store_dump_spr(cpu_env, t0);
     tcg_temp_free_i32(t0);
+    }
+    ++kkkk;
 #endif
 }
 
@@ -132,12 +140,14 @@ static void spr_write_xer (void *opaque, int sprn, int gprn)
 /* LR */
 static void spr_read_lr (void *opaque, int gprn, int sprn)
 {
+    //tcg_gen_ld_tl(cpu_gpr[gprn], cpu_env, offsetof(CPUPPCState, lr));
     tcg_gen_mov_tl(cpu_gpr[gprn], cpu_lr);
 }
 
 static void spr_write_lr (void *opaque, int sprn, int gprn)
 {
     tcg_gen_mov_tl(cpu_lr, cpu_gpr[gprn]);
+    //tcg_gen_st_tl(cpu_gpr[gprn], cpu_env, offsetof(CPUPPCState, lr));
 }
 
 /* CFAR */
@@ -652,6 +662,7 @@ static void gen_spr_generic (CPUPPCState *env)
                  &spr_read_xer, &spr_write_xer,
                  0x00000000);
     /* Branch contol */
+    printf("\n\n%s %u\n\n", __func__, __LINE__);
     spr_register(env, SPR_LR, "LR",
                  &spr_read_lr, &spr_write_lr,
                  &spr_read_lr, &spr_write_lr,
@@ -7286,6 +7297,7 @@ enum BOOK3S_CPU_TYPE {
 static void spr_write_and_tb_flush(void *opaque, int sprn, int gprn)
 {
     gen_update_current_nip(opaque);
+    if (0)
     gen_helper_tb_flush(cpu_env);
     spr_write_generic(opaque, sprn, gprn);
 }
@@ -8080,6 +8092,7 @@ POWERPC_FAMILY(POWER7)(ObjectClass *oc, void *data)
                         PPC2_ATOMIC_ISA206 | PPC2_FP_CVT_ISA206 |
                         PPC2_FP_TST_ISA206;
     pcc->msr_mask = (1ull << MSR_SF) |
+                    (1ull << MSR_TM) |
                     (1ull << MSR_VR) |
                     (1ull << MSR_VSX) |
                     (1ull << MSR_EE) |
@@ -8141,6 +8154,7 @@ POWERPC_FAMILY(POWER7P)(ObjectClass *oc, void *data)
                         PPC2_ATOMIC_ISA206 | PPC2_FP_CVT_ISA206 |
                         PPC2_FP_TST_ISA206;
     pcc->msr_mask = (1ull << MSR_SF) |
+                    (1ull << MSR_TM) |
                     (1ull << MSR_VR) |
                     (1ull << MSR_VSX) |
                     (1ull << MSR_EE) |
