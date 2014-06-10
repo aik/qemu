@@ -48,11 +48,13 @@
 #include "exec/address-spaces.h"
 #include "hw/acpi/acpi.h"
 #include "cpu.h"
+#include "hw/nmi.h"
 #ifdef CONFIG_XEN
 #  include <xen/hvm/hvm_info_table.h>
 #endif
 
 #define MAX_IDE_BUS 2
+#define TYPE_NMI_X86        "x86-nmi"
 
 static const int ide_iobase[MAX_IDE_BUS] = { 0x1f0, 0x170 };
 static const int ide_iobase2[MAX_IDE_BUS] = { 0x3f6, 0x376 };
@@ -257,6 +259,9 @@ static void pc_init1(MachineState *machine,
     if (pci_enabled) {
         pc_pci_device_init(pci_bus);
     }
+
+    object_property_add_child(OBJECT(machine), "nmi",
+                              object_new(TYPE_NMI_X86), NULL);
 }
 
 static void pc_init_pci(MachineState *machine)
@@ -866,3 +871,40 @@ static void pc_machine_init(void)
 }
 
 machine_init(pc_machine_init);
+
+static void x86_nmi(NMIState *n, int cpu_index, Error **errp)
+{
+    CPUState *cs = qemu_get_cpu(cpu_index);
+    X86CPU *cpu = X86_CPU(cs);
+
+    if (!cpu->apic_state) {
+        cpu_interrupt(cs, CPU_INTERRUPT_NMI);
+#ifndef CONFIG_USER_ONLY
+    } else {
+        apic_deliver_nmi(cpu->apic_state);
+#endif
+    }
+}
+
+static void x86_nmi_class_init(ObjectClass *oc, void *data)
+{
+    NMIClass *nc = NMI_CLASS(oc);
+    nc->nmi_monitor_handler = x86_nmi;
+}
+
+static const TypeInfo x86_nmi_info = {
+    .name          = TYPE_NMI_X86,
+    .parent        = TYPE_OBJECT,
+    .class_init    = x86_nmi_class_init,
+    .interfaces = (InterfaceInfo[]) {
+        { TYPE_NMI },
+        { }
+    },
+};
+
+static void x86_nmi_register_types(void)
+{
+    type_register_static(&x86_nmi_info);
+}
+
+type_init(x86_nmi_register_types)
