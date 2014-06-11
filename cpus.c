@@ -38,6 +38,7 @@
 #include "qemu/main-loop.h"
 #include "qemu/bitmap.h"
 #include "qemu/seqlock.h"
+#include "hw/nmi.h"
 
 #ifndef _WIN32
 #include "qemu/compatfd.h"
@@ -1495,6 +1496,6 @@ void qmp_inject_nmi(Error **errp)
         }
     }
 #else
-    error_set(errp, QERR_UNSUPPORTED);
+    nmi_monitor_handle(monitor_get_cpu_index(), errp);
 #endif
 }
