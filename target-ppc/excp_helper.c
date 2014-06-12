@@ -802,6 +802,14 @@ void ppc_hw_interrupt(CPUPPCState *env)
         }
     }
 }
+
+void ppc_cpu_do_nmi(CPUState *cs)
+{
+    PowerPCCPU *cpu = POWERPC_CPU(cs);
+    CPUPPCState *env = &cpu->env;
+
+    powerpc_excp(cpu, env->excp_model, POWERPC_EXCP_RESET);
+}
 #endif /* !CONFIG_USER_ONLY */
 
 #if defined(DEBUG_OP)
