@@ -351,6 +351,20 @@ static size_t create_page_sizes_prop(CPUPPCState *env, uint32_t *prop,
     return (p - prop) * sizeof(uint32_t);
 }
 
+static hwaddr spapr_node0_size(void)
+{
+    if (nb_numa_nodes > 1) {
+        int i;
+        for (i = 0; i < nb_numa_nodes; ++i) {
+            if (node_mem[i]) {
+                return MIN(pow2floor(node_mem[i]), ram_size);
+            }
+        }
+        return ram_size;
+    }
+    return ram_size;
+}
+
 #define _FDT(exp) \
     do { \
         int ret = (exp);                                           \
@@ -851,8 +865,8 @@ static void spapr_reset_htab(sPAPREnvironment *spapr)
 
     /* Update the RMA size if necessary */
     if (spapr->vrma_adjust) {
-        hwaddr node0_size = (nb_numa_nodes > 1) ? node_mem[0] : ram_size;
-        spapr->rma_size = kvmppc_rma_size(node0_size, spapr->htab_shift);
+        spapr->rma_size = kvmppc_rma_size(spapr_node0_size(),
+                                          spapr->htab_shift);
     }
 }
 
@@ -1284,7 +1298,7 @@ static void ppc_spapr_init(MachineState *machine)
     MemoryRegion *sysmem = get_system_memory();
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     hwaddr rma_alloc_size;
-    hwaddr node0_size = (nb_numa_nodes > 1) ? node_mem[0] : ram_size;
+    hwaddr node0_size = spapr_node0_size();
     uint32_t initrd_base = 0;
     long kernel_size = 0, initrd_size = 0;
     long load_limit, rtas_limit, fw_size;
