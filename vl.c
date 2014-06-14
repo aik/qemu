@@ -1356,7 +1356,7 @@ static void numa_add(const char *optarg)
         if (get_param_value(option, 128, "cpus", optarg) != 0) {
             numa_node_parse_cpus(nodenr, option);
         }
-        nb_numa_nodes++;
+        nb_numa_nodes = MAX(nb_numa_nodes + 1, nodenr + 1);
     } else {
         fprintf(stderr, "Invalid -numa option: %s\n", option);
         exit(1);
