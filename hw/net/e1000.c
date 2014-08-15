@@ -267,6 +267,7 @@ static const uint32_t mac_reg_init[] = {
     [STATUS] =  0x80000000 | E1000_STATUS_GIO_MASTER_ENABLE |
                 E1000_STATUS_ASDV | E1000_STATUS_MTXCKOK |
                 E1000_STATUS_SPEED_1000 | E1000_STATUS_FD |
+                E1000_STATUS_PCIX_MODE |
                 E1000_STATUS_LU,
     [MANC] =    E1000_MANC_EN_MNG2HOST | E1000_MANC_RCV_TCO_EN |
                 E1000_MANC_ARP_EN | E1000_MANC_0298_EN |
