@@ -69,6 +69,8 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
     /* Register default 32bit DMA window */
     memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
                                 spapr_tce_get_iommu(tcet));
+
+    object_unref(OBJECT(tcet));
 }
 
 static void spapr_phb_vfio_reset(DeviceState *qdev)
