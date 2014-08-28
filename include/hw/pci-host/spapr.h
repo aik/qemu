@@ -49,6 +49,24 @@ struct sPAPRPHBClass {
     PCIHostBridgeClass parent_class;
 
     void (*finish_realize)(sPAPRPHBState *sphb, Error **errp);
+
+/* sPAPR spec defined pagesize mask values */
+#define DDW_PGSIZE_4K       0x01
+#define DDW_PGSIZE_64K      0x02
+#define DDW_PGSIZE_16M      0x04
+#define DDW_PGSIZE_32M      0x08
+#define DDW_PGSIZE_64M      0x10
+#define DDW_PGSIZE_128M     0x20
+#define DDW_PGSIZE_256M     0x40
+#define DDW_PGSIZE_16G      0x80
+
+    int (*ddw_query)(sPAPRPHBState *sphb, uint32_t *windows_available,
+                     uint32_t *page_size_mask);
+    int (*ddw_create)(sPAPRPHBState *sphb, uint32_t page_shift,
+                      uint32_t window_shift, uint32_t liobn,
+                      sPAPRTCETable **ptcet);
+    int (*ddw_remove)(sPAPRPHBState *sphb, sPAPRTCETable *tcet);
+    int (*ddw_reset)(sPAPRPHBState *sphb);
 };
 
 typedef struct spapr_pci_msi {
