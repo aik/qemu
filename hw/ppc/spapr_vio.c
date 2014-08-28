@@ -468,7 +468,7 @@ static int spapr_vio_busdev_init(DeviceState *qdev)
     }
 
     if (pc->rtce_window_size) {
-        uint32_t liobn = SPAPR_VIO_BASE_LIOBN | dev->reg;
+        uint32_t liobn = SPAPR_VIO_LIOBN(dev->reg);
 
         memory_region_init(&dev->mrroot, OBJECT(dev), "iommu-spapr-root",
                            ram_size);
