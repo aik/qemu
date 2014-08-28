@@ -455,7 +455,7 @@ static int spapr_vio_busdev_init(DeviceState *qdev)
     }
 
     if (pc->rtce_window_size) {
-        uint32_t liobn = SPAPR_VIO_BASE_LIOBN | dev->reg;
+        uint32_t liobn = SPAPR_VIO_LIOBN(dev->reg);
         dev->tcet = spapr_tce_new_table(qdev, liobn,
                                         0,
                                         SPAPR_TCE_PAGE_SHIFT,
