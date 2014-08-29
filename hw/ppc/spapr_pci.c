@@ -1016,6 +1016,17 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         spc->ddw_query && spc->ddw_create && spc->ddw_remove) {
         _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable", &ddw_applicable,
                          sizeof(ddw_applicable)));
+
+        if (spc->ddw_reset) {
+            uint32_t ddw_extensions[] = {
+                cpu_to_be32(1),
+                cpu_to_be32(RTAS_IBM_RESET_PE_DMA_WINDOW)
+            };
+
+            /* When enabled, the guest will remove the default 32bit window */
+            _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-extensions",
+                             &ddw_extensions, sizeof(ddw_extensions)));
+        }
     }
 
     /* Build the interrupt-map, this must matches what is done
