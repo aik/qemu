@@ -1275,6 +1275,7 @@ spapr_iommu_new_table(uint64_t liobn, void *tcet, void *table, int fd) "liobn=%"
 spapr_iommu_ddw_query(uint64_t buid, uint32_t cfgaddr, uint32_t wa, uint32_t pgz, uint32_t pgz_fixed, long ret) "buid=%"PRIx64" addr=%"PRIx32", %u windows available, sizes %"PRIx32", fixed %"PRIx32", ret = %ld"
 spapr_iommu_ddw_create(uint64_t buid, uint32_t cfgaddr, unsigned long long pg_size, unsigned long long req_size, uint64_t start, uint32_t liobn, long ret) "buid=%"PRIx64" addr=%"PRIx32", page size=0x%llx, requested=0x%llx, start addr=%"PRIx64", liobn=%"PRIx32", ret = %ld"
 spapr_iommu_ddw_remove(uint32_t liobn, long ret) "liobn=%"PRIx32", ret = %ld"
+spapr_iommu_ddw_reset(uint64_t buid, uint32_t cfgaddr, long ret) "buid=%"PRIx64" addr=%"PRIx32", ret = %ld"
 
 # hw/ppc/ppc.c
 ppc_tb_adjust(uint64_t offs1, uint64_t offs2, int64_t diff, int64_t seconds) "adjusted from 0x%"PRIx64" to 0x%"PRIx64", diff %"PRId64" (%"PRId64"s)"

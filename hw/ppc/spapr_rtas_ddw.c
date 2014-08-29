@@ -218,6 +218,52 @@ param_error_exit:
     rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
 }
 
+static void rtas_ibm_reset_pe_dma_window(PowerPCCPU *cpu,
+                                         sPAPREnvironment *spapr,
+                                         uint32_t token, uint32_t nargs,
+                                         target_ulong args,
+                                         uint32_t nret, target_ulong rets)
+{
+    sPAPRPHBState *sphb;
+    sPAPRPHBClass *spc;
+    uint64_t buid;
+    uint32_t addr;
+    long ret;
+
+    if ((nargs != 3) || (nret != 1)) {
+        goto param_error_exit;
+    }
+
+    buid = ((uint64_t)rtas_ld(args, 1) << 32) | rtas_ld(args, 2);
+    addr = rtas_ld(args, 0);
+    sphb = spapr_pci_find_phb(spapr, buid);
+    if (!sphb) {
+        goto param_error_exit;
+    }
+
+    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
+    if (!spc->ddw_reset) {
+        goto hw_error_exit;
+    }
+
+    ret = spc->ddw_reset(sphb);
+    trace_spapr_iommu_ddw_reset(buid, addr, ret);
+    if (ret) {
+        goto hw_error_exit;
+    }
+
+    rtas_st(rets, 0, RTAS_OUT_SUCCESS);
+
+    return;
+
+hw_error_exit:
+    rtas_st(rets, 0, RTAS_OUT_HW_ERROR);
+    return;
+
+param_error_exit:
+    rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+}
+
 static void spapr_rtas_ddw_init(void)
 {
     spapr_rtas_register(RTAS_IBM_QUERY_PE_DMA_WINDOW,
@@ -229,6 +275,9 @@ static void spapr_rtas_ddw_init(void)
     spapr_rtas_register(RTAS_IBM_REMOVE_PE_DMA_WINDOW,
                         "ibm,remove-pe-dma-window",
                         rtas_ibm_remove_pe_dma_window);
+    spapr_rtas_register(RTAS_IBM_RESET_PE_DMA_WINDOW,
+                        "ibm,reset-pe-dma-window",
+                        rtas_ibm_reset_pe_dma_window);
 }
 
 type_init(spapr_rtas_ddw_init)
