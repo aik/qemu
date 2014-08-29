@@ -973,6 +973,13 @@ struct kvm_vfio_spapr_tce_liobn {
 	__u64	start_addr;
 };
 
+struct kvm_vfio_spapr_tce_liobn {
+	__u32	argsz;
+	__s32	fd;
+	__u32	liobn;
+	__u64	start_addr;
+};
+
 /*
  * ioctls for VM fds
  */
