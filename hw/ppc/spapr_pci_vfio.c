@@ -159,6 +159,21 @@ static int spapr_pci_vfio_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
     return ret;
 }
 
+#if 0
+static int spapr_pci_vfio_ddw_reset(sPAPRPHBState *sphb)
+{
+    sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
+    struct vfio_iommu_spapr_tce_reset reset = { .argsz = sizeof(reset) };
+    int ret;
+
+    spapr_pci_ddw_reset(sphb);
+    ret = vfio_container_ioctl(&sphb->iommu_as, svphb->iommugroupid,
+                               VFIO_IOMMU_SPAPR_TCE_RESET, &reset);
+
+    return ret;
+}
+#endif
+
 static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
