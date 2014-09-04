@@ -127,6 +127,7 @@ static int spapr_tce_table_realize(DeviceState *dev)
     if (!tcet->table) {
         size_t table_size = tcet->nb_table * sizeof(uint64_t);
         tcet->table = g_malloc0(table_size);
+        tcet->vfio_accel = false;
     }
 
     trace_spapr_iommu_new_table(tcet->liobn, tcet, tcet->table, tcet->fd);

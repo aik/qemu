@@ -22,6 +22,7 @@
 #include "hw/pci-host/spapr.h"
 #include "linux/vfio.h"
 #include "hw/misc/vfio.h"
+#include "qemu/error-report.h"
 
 #define DDW_PGSIZE_4K           0x01
 #define DDW_PGSIZE_64K          0x02
@@ -92,6 +93,16 @@ static void spapr_phb_vfio_reset(DeviceState *qdev)
     sphb->windows_num = 1;
 
     sphb->ddw_enabled = (info.windows_supported > 1);
+
+    if (!tcet->vfio_accel) {
+        return;
+    }
+    ret = vfio_container_spapr_set_liobn(&svphb->phb.iommu_as,
+                                         tcet->liobn,
+                                         tcet->bus_offset);
+    if (ret) {
+        error_report("spapr-vfio: failed to create link to IOMMU");
+    }
 }
 
 static int spapr_pci_vfio_ddw_query(sPAPRPHBState *sphb,
@@ -140,6 +151,16 @@ static int spapr_pci_vfio_ddw_create(sPAPRPHBState *sphb, uint32_t page_shift,
                                 spapr_tce_get_iommu(*ptcet));
 
     ++sphb->windows_num;
+
+    if (!(*ptcet)->vfio_accel) {
+        return 0;
+    }
+    ret = vfio_container_spapr_set_liobn(&sphb->iommu_as,
+                                         liobn, (*ptcet)->bus_offset);
+    if (ret) {
+        error_report("spapr-vfio: failed to create link to IOMMU");
+        ret = 0;
+    }
 
     return ret;
 }
