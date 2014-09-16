@@ -4962,6 +4962,7 @@ int coroutine_fn bdrv_co_flush(BlockDriverState *bs)
     int ret;
 
     if (!bs || !bdrv_is_inserted(bs) || bdrv_is_read_only(bs)) {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         return 0;
     }
 
@@ -4974,6 +4975,7 @@ int coroutine_fn bdrv_co_flush(BlockDriverState *bs)
         }
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     /* But don't actually force it to the disk with cache=unsafe */
     if (bs->open_flags & BDRV_O_NO_FLUSH) {
         goto flush_parent;
@@ -4981,18 +4983,24 @@ int coroutine_fn bdrv_co_flush(BlockDriverState *bs)
 
     BLKDBG_EVENT(bs->file, BLKDBG_FLUSH_TO_DISK);
     if (bs->drv->bdrv_co_flush_to_disk) {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         ret = bs->drv->bdrv_co_flush_to_disk(bs);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     } else if (bs->drv->bdrv_aio_flush) {
         BlockDriverAIOCB *acb;
         CoroutineIOCompletion co = {
             .coroutine = qemu_coroutine_self(),
         };
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         acb = bs->drv->bdrv_aio_flush(bs, bdrv_co_io_em_complete, &co);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         if (acb == NULL) {
             ret = -EIO;
         } else {
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             qemu_coroutine_yield();
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             ret = co.ret;
         }
     } else {
@@ -5017,6 +5025,7 @@ int coroutine_fn bdrv_co_flush(BlockDriverState *bs)
      * in the case of cache=unsafe, so there are no useless flushes.
      */
 flush_parent:
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     return bdrv_co_flush(bs->file);
 }
 
@@ -5087,15 +5096,21 @@ int bdrv_flush(BlockDriverState *bs)
 
     if (qemu_in_coroutine()) {
         /* Fast-path if already in coroutine context */
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         bdrv_flush_co_entry(&rwco);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     } else {
         AioContext *aio_context = bdrv_get_aio_context(bs);
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         co = qemu_coroutine_create(bdrv_flush_co_entry);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         qemu_coroutine_enter(co, &rwco);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         while (rwco.ret == NOT_DONE) {
             aio_poll(aio_context, true);
         }
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     }
 
     return rwco.ret;

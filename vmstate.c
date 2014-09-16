@@ -43,6 +43,12 @@ static int vmstate_size(void *opaque, VMStateField *field)
     return size;
 }
 
+extern void aikdbg(void);
+void aikdbg(void)
+{
+    printf("+++Q+++ %s %u ERROR!\n", __func__, __LINE__);
+}
+
 static void *vmstate_base_addr(void *opaque, VMStateField *field, bool alloc)
 {
     void *base_addr = opaque + field->offset;
@@ -73,6 +79,7 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
     if  (version_id < vmsd->minimum_version_id) {
         if (vmsd->load_state_old &&
             version_id >= vmsd->minimum_version_id_old) {
+            printf("+++Q+++ %s %u\n", __func__, __LINE__);
             return vmsd->load_state_old(f, opaque, version_id);
         }
         return -EINVAL;
@@ -80,6 +87,7 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
     if (vmsd->pre_load) {
         int ret = vmsd->pre_load(opaque);
         if (ret) {
+            printf("+++Q+++ %s %u\n", __func__, __LINE__);
             return ret;
         }
     }
@@ -101,9 +109,20 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
                 if (field->flags & VMS_STRUCT) {
                     ret = vmstate_load_state(f, field->vmsd, addr,
                                              field->vmsd->version_id);
+                    if (ret)
+                    {
+                        printf("+++Q+++ %s %u %s::%x field=%s\n", __func__, __LINE__,
+                               vmsd->name, version_id, field->name);
+                        aikdbg();
+                    }
                 } else {
                     ret = field->info->get(f, addr, size);
-
+                    if (ret)
+                    {
+                        printf("+++Q+++ %s %u %s::%x field=%s\n", __func__, __LINE__,
+                               vmsd->name, version_id, field->name);
+                        aikdbg();
+                    }
                 }
                 if (ret >= 0) {
                     ret = qemu_file_get_error(f);
@@ -111,6 +130,9 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
                 if (ret < 0) {
                     qemu_file_set_error(f, ret);
                     trace_vmstate_load_field_error(field->name, ret);
+                        printf("+++Q+++ %s %u %s::%x field=%s\n", __func__, __LINE__,
+                               vmsd->name, version_id, field->name);
+                        aikdbg();
                     return ret;
                 }
             }
@@ -126,7 +148,14 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
         return ret;
     }
     if (vmsd->post_load) {
-        return vmsd->post_load(opaque, version_id);
+        ret = vmsd->post_load(opaque, version_id);
+
+        if (ret) {
+            printf("+++Q+++ %s %u %s::%x field=%s\n", __func__, __LINE__,
+                   vmsd->name, version_id, field->name);
+            aikdbg();
+        }
+        return ret;
     }
     return 0;
 }

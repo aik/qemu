@@ -561,6 +561,8 @@ int migrate_use_xbzrle(void)
     MigrationState *s;
 
     s = migrate_get_current();
+    if (1)
+        return 0;
 
     return s->enabled_capabilities[MIGRATION_CAPABILITY_XBZRLE];
 }
@@ -612,6 +614,7 @@ static void *migration_thread(void *opaque)
                 if (ret >= 0) {
                     qemu_file_set_rate_limit(s->file, INT64_MAX);
                     qemu_savevm_state_complete(s->file);
+                    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 }
                 qemu_mutex_unlock_iothread();
 
@@ -622,6 +625,7 @@ static void *migration_thread(void *opaque)
 
                 if (!qemu_file_get_error(s->file)) {
                     migrate_set_state(s, MIG_STATE_ACTIVE, MIG_STATE_COMPLETED);
+                    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                     break;
                 }
             }
@@ -629,6 +633,7 @@ static void *migration_thread(void *opaque)
 
         if (qemu_file_get_error(s->file)) {
             migrate_set_state(s, MIG_STATE_ACTIVE, MIG_STATE_ERROR);
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             break;
         }
         current_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
@@ -659,6 +664,7 @@ static void *migration_thread(void *opaque)
         }
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_mutex_lock_iothread();
     if (s->state == MIG_STATE_COMPLETED) {
         int64_t end_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
@@ -675,8 +681,11 @@ static void *migration_thread(void *opaque)
             vm_start();
         }
     }
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_bh_schedule(s->cleanup_bh);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_mutex_unlock_iothread();
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     return NULL;
 }

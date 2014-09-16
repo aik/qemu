@@ -41,7 +41,7 @@
 #include "qemu/queue.h"
 #include "qemu/main-loop.h"
 
-//#define DEBUG_NBD
+#define DEBUG_NBD
 
 #ifdef DEBUG_NBD
 #define TRACE(msg, ...) do { \
@@ -1255,12 +1255,14 @@ static void nbd_trip(void *opaque)
         goto out;
     case NBD_CMD_FLUSH:
         TRACE("Request type is FLUSH");
+        printf("+++Q+++ (%u) %s %u bs=%p START\n", getpid(), __func__, __LINE__, exp->bs);
 
         ret = bdrv_co_flush(exp->bs);
         if (ret < 0) {
             LOG("flush failed");
             reply.error = -ret;
         }
+        printf("+++Q+++ (%u) %s %u END\n", getpid(), __func__, __LINE__);
         if (nbd_co_send_reply(req, &reply, 0) < 0) {
             goto out;
         }

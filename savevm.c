@@ -744,8 +744,11 @@ void qemu_savevm_state_complete(QEMUFile *f)
         trace_savevm_section_end(se->idstr, se->section_id);
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_put_byte(f, QEMU_VM_EOF);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_fflush(f);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 }
 
 uint64_t qemu_savevm_state_pending(QEMUFile *f, uint64_t max_size)
@@ -846,7 +849,9 @@ static int qemu_save_device_state(QEMUFile *f)
         vmstate_save(f, se);
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qemu_put_byte(f, QEMU_VM_EOF);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     return qemu_file_get_error(f);
 }
@@ -888,20 +893,24 @@ int qemu_loadvm_state(QEMUFile *f)
     int ret;
 
     if (qemu_savevm_state_blocked(NULL)) {
+        printf("+++Q+++ %s %u\n", __func__, __LINE__);
         return -EINVAL;
     }
 
     v = qemu_get_be32(f);
     if (v != QEMU_VM_FILE_MAGIC) {
+        printf("+++Q+++ %s %u\n", __func__, __LINE__);
         return -EINVAL;
     }
 
     v = qemu_get_be32(f);
     if (v == QEMU_VM_FILE_VERSION_COMPAT) {
         fprintf(stderr, "SaveVM v2 format is obsolete and don't work anymore\n");
+        printf("+++Q+++ %s %u\n", __func__, __LINE__);
         return -ENOTSUP;
     }
     if (v != QEMU_VM_FILE_VERSION) {
+        printf("+++Q+++ %s %u\n", __func__, __LINE__);
         return -ENOTSUP;
     }
 
@@ -927,6 +936,7 @@ int qemu_loadvm_state(QEMUFile *f)
             if (se == NULL) {
                 fprintf(stderr, "Unknown savevm section or instance '%s' %d\n", idstr, instance_id);
                 ret = -EINVAL;
+                printf("+++Q+++ %s %u\n", __func__, __LINE__);
                 goto out;
             }
 
@@ -935,6 +945,7 @@ int qemu_loadvm_state(QEMUFile *f)
                 fprintf(stderr, "savevm: unsupported version %d for '%s' v%d\n",
                         version_id, idstr, se->version_id);
                 ret = -EINVAL;
+                printf("+++Q+++ %s %u\n", __func__, __LINE__);
                 goto out;
             }
 
@@ -950,6 +961,7 @@ int qemu_loadvm_state(QEMUFile *f)
             if (ret < 0) {
                 fprintf(stderr, "qemu: warning: error while loading state for instance 0x%x of device '%s'\n",
                         instance_id, idstr);
+                printf("+++Q+++ %s %u\n", __func__, __LINE__);
                 goto out;
             }
             break;
@@ -965,6 +977,7 @@ int qemu_loadvm_state(QEMUFile *f)
             if (le == NULL) {
                 fprintf(stderr, "Unknown savevm section %d\n", section_id);
                 ret = -EINVAL;
+                printf("+++Q+++ %s %u\n", __func__, __LINE__);
                 goto out;
             }
 
@@ -972,21 +985,26 @@ int qemu_loadvm_state(QEMUFile *f)
             if (ret < 0) {
                 fprintf(stderr, "qemu: warning: error while loading state section id %d\n",
                         section_id);
+                printf("+++Q+++ %s %u\n", __func__, __LINE__);
                 goto out;
             }
             break;
         default:
             fprintf(stderr, "Unknown savevm section type %d\n", section_type);
             ret = -EINVAL;
+            printf("+++Q+++ %s %u\n", __func__, __LINE__);
             goto out;
         }
     }
+    printf("+++Q+++ (%u) %s %u EOF Received! section_type=%u (EOF=%u)\n",
+            getpid(), __func__, __LINE__, section_type, QEMU_VM_EOF);
 
     cpu_synchronize_all_post_init();
 
     ret = 0;
 
 out:
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     QLIST_FOREACH_SAFE(le, &loadvm_handlers, entry, new_le) {
         QLIST_REMOVE(le, entry);
         g_free(le);
@@ -995,6 +1013,7 @@ out:
     if (ret == 0) {
         ret = qemu_file_get_error(f);
     }
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     return ret;
 }

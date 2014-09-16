@@ -1396,18 +1396,22 @@ fail:
 static void qcow2_close(BlockDriverState *bs)
 {
     BDRVQcowState *s = bs->opaque;
+    printf("+++Q+++ (%u) %s %u START\n", getpid(), __func__, __LINE__);
     qemu_vfree(s->l1_table);
     /* else pre-write overlap checks in cache_destroy may crash */
     s->l1_table = NULL;
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     if (!(bs->open_flags & BDRV_O_INCOMING)) {
         qcow2_cache_flush(bs, s->l2_table_cache);
         qcow2_cache_flush(bs, s->refcount_block_cache);
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         qcow2_mark_clean(bs);
     }
 
     qcow2_cache_destroy(bs, s->l2_table_cache);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qcow2_cache_destroy(bs, s->refcount_block_cache);
 
     g_free(s->unknown_header_fields);
@@ -1415,8 +1419,10 @@ static void qcow2_close(BlockDriverState *bs)
 
     g_free(s->cluster_cache);
     qemu_vfree(s->cluster_data);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     qcow2_refcount_close(bs);
     qcow2_free_snapshots(bs);
+    printf("+++Q+++ (%u) %s %u DONE!\n", getpid(), __func__, __LINE__);
 }
 
 static void qcow2_invalidate_cache(BlockDriverState *bs, Error **errp)
@@ -1445,10 +1451,12 @@ static void qcow2_invalidate_cache(BlockDriverState *bs, Error **errp)
 
     bdrv_invalidate_cache(bs->file, &local_err);
     if (local_err) {
+        printf("+++Q+++ %s %u\n", __func__, __LINE__);
         error_propagate(errp, local_err);
         return;
     }
 
+    printf("+++Q+++ %s %u\n", __func__, __LINE__);
     memset(s, 0, sizeof(BDRVQcowState));
     options = qdict_clone_shallow(bs->options);
 
@@ -2156,22 +2164,30 @@ fail:
 static coroutine_fn int qcow2_co_flush_to_os(BlockDriverState *bs)
 {
     BDRVQcowState *s = bs->opaque;
-    int ret;
+    int ret = 0;
 
     qemu_co_mutex_lock(&s->lock);
+    if (!s->l2_table_cache)
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+
     ret = qcow2_cache_flush(bs, s->l2_table_cache);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     if (ret < 0) {
         qemu_co_mutex_unlock(&s->lock);
         return ret;
     }
 
-    if (qcow2_need_accurate_refcounts(s)) {
+    if (qcow2_need_accurate_refcounts(s) /*&& s->refcount_block_cache*/) {
         ret = qcow2_cache_flush(bs, s->refcount_block_cache);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         if (ret < 0) {
             qemu_co_mutex_unlock(&s->lock);
             return ret;
         }
     }
+    else
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+
     qemu_co_mutex_unlock(&s->lock);
 
     return 0;

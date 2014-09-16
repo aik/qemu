@@ -170,6 +170,8 @@ int qcow2_cache_flush(BlockDriverState *bs, Qcow2Cache *c)
     int i;
 
     trace_qcow2_cache_flush(qemu_coroutine_self(), c == s->l2_table_cache);
+    printf("_qcow2_cache_flush %p %p - %p %p\n",
+            qemu_coroutine_self(), c, s, s?s->l2_table_cache:NULL);
 
     for (i = 0; i < c->size; i++) {
         ret = qcow2_cache_entry_flush(bs, c, i);

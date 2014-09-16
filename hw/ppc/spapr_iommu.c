@@ -90,10 +90,37 @@ static IOMMUTLBEntry spapr_tce_translate_iommu(MemoryRegion *iommu, hwaddr addr,
     return ret;
 }
 
+static void spapr_tce_prn(void *opaque)
+{
+    sPAPRTCETable *tcet = SPAPR_TCE_TABLE(opaque);
+
+    printf("liobn %x nb=%u bus_off=%lx, shift=%u, table=%p\n",
+		tcet->liobn,
+		tcet->nb_table,
+		tcet->bus_offset,
+		tcet->page_shift,
+		tcet->table);
+}
+
+static int spapr_tce_pre_load(void *opaque)
+{
+    printf("+++Q+++ %s %u\n", __func__, __LINE__);
+    spapr_tce_prn(opaque);
+    return 0;
+}
+
+static void spapr_tce_pre_save(void *opaque)
+{
+    printf("+++Q+++ %s %u\n", __func__, __LINE__);
+    spapr_tce_prn(opaque);
+}
+
 static const VMStateDescription vmstate_spapr_tce_table = {
     .name = "spapr_iommu",
     .version_id = 2,
     .minimum_version_id = 2,
+    .pre_save = spapr_tce_pre_save,
+    .pre_load = spapr_tce_pre_load,
     .fields      = (VMStateField []) {
         /* Sanity check */
         VMSTATE_UINT32_EQUAL(liobn, sPAPRTCETable),

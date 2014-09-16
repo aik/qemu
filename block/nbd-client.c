@@ -302,6 +302,7 @@ int nbd_client_session_co_flush(NbdClientSession *client)
     request.from = 0;
     request.len = 0;
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     nbd_coroutine_start(client, &request);
     ret = nbd_co_send_request(client, &request, NULL, 0);
     if (ret < 0) {
@@ -310,6 +311,7 @@ int nbd_client_session_co_flush(NbdClientSession *client)
         nbd_co_receive_reply(client, &request, &reply, NULL, 0);
     }
     nbd_coroutine_end(client, &request);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     return -reply.error;
 }
 
