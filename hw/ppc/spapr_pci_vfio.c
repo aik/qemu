@@ -71,6 +71,8 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
                                 spapr_tce_get_iommu(tcet));
 
     object_unref(OBJECT(tcet));
+
+    sphb->windows_num = 1;
 }
 
 static void spapr_phb_vfio_reset(DeviceState *qdev)

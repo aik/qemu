@@ -651,6 +651,8 @@ static void spapr_phb_finish_realize(sPAPRPHBState *sphb, Error **errp)
                                 spapr_tce_get_iommu(tcet));
 
     object_unref(OBJECT(tcet));
+
+    sphb->windows_num = 1;
 }
 
 static int spapr_phb_children_reset(Object *child, void *opaque)
@@ -760,7 +762,7 @@ static int spapr_pci_post_load(void *opaque, int version_id)
 
 static const VMStateDescription vmstate_spapr_pci = {
     .name = "spapr_pci",
-    .version_id = 2,
+    .version_id = 3,
     .minimum_version_id = 2,
     .pre_save = spapr_pci_pre_save,
     .post_load = spapr_pci_post_load,
@@ -776,6 +778,7 @@ static const VMStateDescription vmstate_spapr_pci = {
         VMSTATE_INT32(msi_devs_num, sPAPRPHBState),
         VMSTATE_STRUCT_VARRAY_ALLOC(msi_devs, sPAPRPHBState, msi_devs_num, 0,
                                     vmstate_spapr_pci_msi, spapr_pci_msi_mig),
+        VMSTATE_INT32_V(windows_num, sPAPRPHBState, 3),
         VMSTATE_END_OF_LIST()
     },
 };
