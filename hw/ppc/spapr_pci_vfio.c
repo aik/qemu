@@ -78,6 +78,8 @@ static void spapr_phb_vfio_reset(DeviceState *qdev)
                                 spapr_tce_get_iommu(tcet));
 
     object_unref(OBJECT(tcet));
+
+    sphb->windows_num = 1;
 }
 
 static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
