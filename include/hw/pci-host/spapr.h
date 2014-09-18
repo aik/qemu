@@ -104,6 +104,8 @@ struct sPAPRPHBState {
     int32_t msi_devs_num;
     spapr_pci_msi_mig *msi_devs;
 
+    bool ddw_enabled;
+
     QLIST_ENTRY(sPAPRPHBState) list;
 };
 
@@ -127,6 +129,12 @@ struct sPAPRPHBVFIOState {
 
 #define SPAPR_PCI_MSI_WINDOW         0x40000000000ULL
 
+/* Default 64bit dynamic window offset */
+#define SPAPR_PCI_TCE64_START        0x8000000000000000ULL
+
+/* Maximum allowed number of DMA windows for emulated PHB */
+#define SPAPR_PCI_DDW_MAX_WINDOWS    2
+
 static inline qemu_irq spapr_phb_lsi_qirq(struct sPAPRPHBState *phb, int pin)
 {
     return xics_get_qirq(spapr->icp, phb->lsi_table[pin].irq);
@@ -145,5 +153,7 @@ void spapr_pci_rtas_init(void);
 sPAPRPHBState *spapr_pci_find_phb(sPAPREnvironment *spapr, uint64_t buid);
 PCIDevice *spapr_pci_find_dev(sPAPREnvironment *spapr, uint64_t buid,
                               uint32_t config_addr);
+int spapr_pci_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet);
+int spapr_pci_ddw_reset(sPAPRPHBState *sphb);
 
 #endif /* __HW_SPAPR_PCI_H__ */

@@ -470,6 +470,77 @@ static const MemoryRegionOps spapr_msi_ops = {
 };
 
 /*
+ * Dynamic DMA windows
+ */
+static int spapr_pci_ddw_query(sPAPRPHBState *sphb,
+                               uint32_t *windows_available,
+                               uint32_t *page_size_mask)
+{
+    *windows_available = SPAPR_PCI_DDW_MAX_WINDOWS - sphb->windows_num;
+    *page_size_mask = DDW_PGSIZE_64K | DDW_PGSIZE_16M;
+
+    return 0;
+}
+
+static int spapr_pci_ddw_create(sPAPRPHBState *sphb, uint32_t page_shift,
+                                uint32_t window_shift, uint32_t liobn,
+                                sPAPRTCETable **ptcet)
+{
+    if (((page_shift != 16) && (page_shift != 24)) ||
+        (sphb->windows_num >= SPAPR_PCI_DDW_MAX_WINDOWS)) {
+        return -1;
+    }
+
+    *ptcet = spapr_tce_new_table(DEVICE(sphb), liobn,
+                                 SPAPR_PCI_TCE64_START, page_shift,
+                                 1ULL << (window_shift - page_shift),
+                                 true);
+    if (!*ptcet) {
+        return -1;
+    }
+    memory_region_add_subregion(&sphb->iommu_root, (*ptcet)->bus_offset,
+                                spapr_tce_get_iommu(*ptcet));
+
+    ++sphb->windows_num;
+
+    return 0;
+}
+
+int spapr_pci_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
+{
+    memory_region_del_subregion(&sphb->iommu_root,
+                                spapr_tce_get_iommu(tcet));
+    spapr_tce_free_table(tcet);
+
+    return 0;
+}
+
+static int spapr_pci_remove_ddw_cb(Object *child, void *opaque)
+{
+    sPAPRTCETable *tcet;
+
+    tcet = (sPAPRTCETable *) object_dynamic_cast(child, TYPE_SPAPR_TCE_TABLE);
+
+    /* Delete all dynamic windows, i.e. every except the default one with #0 */
+    if (tcet && SPAPR_PCI_DMA_WINDOW_NUM(tcet->liobn)) {
+        sPAPRPHBState *sphb = opaque;
+        sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
+
+        spc->ddw_remove(sphb, tcet);
+    }
+
+    return 0;
+}
+
+int spapr_pci_ddw_reset(sPAPRPHBState *sphb)
+{
+    object_child_foreach(OBJECT(sphb), spapr_pci_remove_ddw_cb, sphb);
+    sphb->windows_num = 1;
+
+    return 0;
+}
+
+/*
  * PHB PCI device
  */
 static AddressSpace *spapr_pci_dma_iommu(PCIBus *bus, void *opaque, int devfn)
@@ -668,6 +739,12 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
 
 static void spapr_phb_reset(DeviceState *qdev)
 {
+    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(qdev);
+
+    if (spc->ddw_reset) {
+        spc->ddw_reset(SPAPR_PCI_HOST_BRIDGE(qdev));
+    }
+
     /* Reset the IOMMU state */
     object_child_foreach(OBJECT(qdev), spapr_phb_children_reset, NULL);
 }
@@ -682,6 +759,7 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT64("io_win_addr", sPAPRPHBState, io_win_addr, -1),
     DEFINE_PROP_UINT64("io_win_size", sPAPRPHBState, io_win_size,
                        SPAPR_PCI_IO_WIN_SIZE),
+    DEFINE_PROP_BOOL("ddw", sPAPRPHBState, ddw_enabled, true),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -805,6 +883,10 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->cannot_instantiate_with_device_add_yet = false;
     spc->finish_realize = spapr_phb_finish_realize;
+    spc->ddw_query = spapr_pci_ddw_query;
+    spc->ddw_create = spapr_pci_ddw_create;
+    spc->ddw_remove = spapr_pci_ddw_remove;
+    spc->ddw_reset = spapr_pci_ddw_reset;
 }
 
 static const TypeInfo spapr_phb_info = {
@@ -894,6 +976,12 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     uint32_t interrupt_map_mask[] = {
         cpu_to_be32(b_ddddd(-1)|b_fff(0)), 0x0, 0x0, cpu_to_be32(-1)};
     uint32_t interrupt_map[PCI_SLOT_MAX * PCI_NUM_PINS][7];
+    uint32_t ddw_applicable[] = {
+        cpu_to_be32(RTAS_IBM_QUERY_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_CREATE_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_REMOVE_PE_DMA_WINDOW)
+    };
+    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(phb);
 
     /* Start populating the FDT */
     sprintf(nodename, "pci@%" PRIx64, phb->buid);
@@ -922,6 +1010,13 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     _FDT(fdt_setprop(fdt, bus_off, "reg", &bus_reg, sizeof(bus_reg)));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pci-config-space-type", 0x1));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pe-total-#msi", XICS_IRQS));
+
+    /* Dynamic DMA window */
+    if (phb->ddw_enabled &&
+        spc->ddw_query && spc->ddw_create && spc->ddw_remove) {
+        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable", &ddw_applicable,
+                         sizeof(ddw_applicable)));
+    }
 
     /* Build the interrupt-map, this must matches what is done
      * in pci_spapr_map_irq
