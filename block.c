@@ -5060,6 +5060,10 @@ void bdrv_invalidate_cache_all(Error **errp)
     QTAILQ_FOREACH(bs, &bdrv_states, device_list) {
         AioContext *aio_context = bdrv_get_aio_context(bs);
 
+        if (!(bs->open_flags & BDRV_O_INCOMING)) {
+            continue;
+        }
+
         aio_context_acquire(aio_context);
         bdrv_invalidate_cache(bs, &local_err);
         aio_context_release(aio_context);
