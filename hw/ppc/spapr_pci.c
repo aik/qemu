@@ -495,6 +495,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
 
         if ((sphb->buid != -1) || (sphb->dma_liobn != -1)
             || (sphb->mem_win_addr != -1)
+            || (sphb->mem64_win_addr != -1)
             || (sphb->io_win_addr != -1)) {
             error_setg(errp, "Either \"index\" or other parameters must"
                        " be specified for PAPR PHB, not both");
@@ -507,6 +508,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         windows_base = SPAPR_PCI_WINDOW_BASE
             + sphb->index * SPAPR_PCI_WINDOW_SPACING;
         sphb->mem_win_addr = windows_base + SPAPR_PCI_MMIO_WIN_OFF;
+        sphb->mem64_win_addr = windows_base + SPAPR_PCI_MMIO64_WIN_OFF;
         sphb->io_win_addr = windows_base + SPAPR_PCI_IO_WIN_OFF;
     }
 
@@ -549,6 +551,13 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
                              SPAPR_PCI_MEM_WIN_BUS_OFFSET, sphb->mem_win_size);
     memory_region_add_subregion(get_system_memory(), sphb->mem_win_addr,
                                 &sphb->memwindow);
+
+    sprintf(namebuf, "%s.mmio64-alias", sphb->dtbusname);
+    memory_region_init_alias(&sphb->mem64window, OBJECT(sphb),
+                             namebuf, &sphb->memspace,
+                             SPAPR_PCI_MEM64_WIN_BUS_OFFSET, sphb->mem64_win_size);
+    memory_region_add_subregion(get_system_memory(), sphb->mem64_win_addr,
+                                &sphb->mem64window);
 
     /* Initialize IO regions */
     sprintf(namebuf, "%s.io", sphb->dtbusname);
@@ -675,6 +684,9 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT64("mem_win_addr", sPAPRPHBState, mem_win_addr, -1),
     DEFINE_PROP_UINT64("mem_win_size", sPAPRPHBState, mem_win_size,
                        SPAPR_PCI_MMIO_WIN_SIZE),
+    DEFINE_PROP_UINT64("mem64_win_addr", sPAPRPHBState, mem64_win_addr, -1),
+    DEFINE_PROP_UINT64("mem64_win_size", sPAPRPHBState, mem64_win_size,
+                       SPAPR_PCI_MMIO64_WIN_SIZE),
     DEFINE_PROP_UINT64("io_win_addr", sPAPRPHBState, io_win_addr, -1),
     DEFINE_PROP_UINT64("io_win_size", sPAPRPHBState, io_win_size,
                        SPAPR_PCI_IO_WIN_SIZE),
@@ -877,6 +889,11 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
             cpu_to_be32(b_ss(2)), cpu_to_be64(SPAPR_PCI_MEM_WIN_BUS_OFFSET),
             cpu_to_be64(phb->mem_win_addr),
             cpu_to_be64(memory_region_size(&phb->memwindow)),
+        },
+        {
+            cpu_to_be32(b_ss(3)), cpu_to_be64(SPAPR_PCI_MEM64_WIN_BUS_OFFSET),
+            cpu_to_be64(phb->mem64_win_addr),
+            cpu_to_be64(memory_region_size(&phb->mem64window)),
         },
     };
     uint64_t bus_reg[] = { cpu_to_be64(phb->buid), 0 };

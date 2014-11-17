@@ -70,7 +70,9 @@ struct sPAPRPHBState {
 
     MemoryRegion memspace, iospace;
     hwaddr mem_win_addr, mem_win_size, io_win_addr, io_win_size;
+    hwaddr mem64_win_addr, mem64_win_size;
     MemoryRegion memwindow, iowindow, msiwindow;
+    MemoryRegion mem64window;
 
     uint32_t dma_liobn;
     AddressSpace iommu_as;
@@ -96,16 +98,19 @@ struct sPAPRPHBVFIOState {
 
 #define SPAPR_PCI_BASE_BUID          0x800000020000000ULL
 
-#define SPAPR_PCI_WINDOW_BASE        0x10000000000ULL
-#define SPAPR_PCI_WINDOW_SPACING     0x1000000000ULL
-#define SPAPR_PCI_MMIO_WIN_OFF       0xA0000000
+#define SPAPR_PCI_WINDOW_BASE        0x100000000000ULL
+#define SPAPR_PCI_WINDOW_SPACING     0x100000000000ULL
+#define SPAPR_PCI_MMIO_WIN_OFF       0x80000000
 #define SPAPR_PCI_MMIO_WIN_SIZE      0x20000000
-#define SPAPR_PCI_IO_WIN_OFF         0x80000000
+#define SPAPR_PCI_MMIO64_WIN_OFF     0x10000000000ULL
+#define SPAPR_PCI_MMIO64_WIN_SIZE    0x10000000000ULL
+#define SPAPR_PCI_IO_WIN_OFF         0xA0000000
 #define SPAPR_PCI_IO_WIN_SIZE        0x10000
 
 #define SPAPR_PCI_MSI_WINDOW         0x40000000000ULL
 
-#define SPAPR_PCI_MEM_WIN_BUS_OFFSET 0x80000000ULL
+#define SPAPR_PCI_MEM_WIN_BUS_OFFSET   SPAPR_PCI_MMIO_WIN_OFF
+#define SPAPR_PCI_MEM64_WIN_BUS_OFFSET SPAPR_PCI_MMIO64_WIN_OFF
 
 static inline qemu_irq spapr_phb_lsi_qirq(struct sPAPRPHBState *phb, int pin)
 {
