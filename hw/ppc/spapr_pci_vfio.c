@@ -17,6 +17,7 @@
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/error-report.h"
 #include "hw/ppc/spapr.h"
 #include "hw/pci-host/spapr.h"
 #include "linux/vfio.h"
@@ -30,17 +31,23 @@ static Property spapr_phb_vfio_properties[] = {
 static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
 {
     sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
+
+    if (svphb->iommugroupid != -1) {
+        error_report("vfio-spapr: \"iommu\" property is obsolete");
+    }
+}
+
+static void spapr_phb_vfio_reset(DeviceState *qdev)
+{
+    sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(qdev);
+    sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
     struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
     int ret;
     sPAPRTCETable *tcet;
     uint32_t liobn = svphb->phb.dma_liobn;
+    Error **errp = NULL;
 
-    if (svphb->iommugroupid == -1) {
-        error_setg(errp, "Wrong IOMMU group ID %d", svphb->iommugroupid);
-        return;
-    }
-
-    ret = vfio_container_ioctl(&svphb->phb.iommu_as, svphb->iommugroupid,
+    ret = vfio_container_ioctl(&svphb->phb.iommu_as,
                                VFIO_CHECK_EXTENSION,
                                (void *) VFIO_SPAPR_TCE_IOMMU);
     if (ret != 1) {
@@ -49,7 +56,7 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
         return;
     }
 
-    ret = vfio_container_ioctl(&svphb->phb.iommu_as, svphb->iommugroupid,
+    ret = vfio_container_ioctl(&svphb->phb.iommu_as,
                                VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
     if (ret) {
         error_setg_errno(errp, -ret,
@@ -71,11 +78,6 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
                                 spapr_tce_get_iommu(tcet));
 
     object_unref(OBJECT(tcet));
-}
-
-static void spapr_phb_vfio_reset(DeviceState *qdev)
-{
-    /* Do nothing */
 }
 
 static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)

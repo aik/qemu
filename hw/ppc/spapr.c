@@ -858,6 +858,10 @@ static int find_unknown_sysbus_device(SysBusDevice *sbdev, void *opaque)
         matched = true;
     }
 
+    if (object_dynamic_cast(OBJECT(sbdev), TYPE_SPAPR_PCI_VFIO_HOST_BRIDGE)) {
+        matched = true;
+    }
+
     if (!matched) {
         error_report("Device %s is not supported by this machine yet.",
                      qdev_fw_name(DEVICE(sbdev)));
