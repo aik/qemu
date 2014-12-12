@@ -156,6 +156,7 @@ struct VFIOGroup;
 
 typedef struct VFIOType1 {
     MemoryListener listener;
+    MemoryListener ramlistener;
     int error;
     bool initialized;
 } VFIOType1;
@@ -2710,6 +2711,99 @@ static void vfio_listener_release(VFIOContainer *container)
     memory_listener_unregister(&container->iommu_data.type1.listener);
 }
 
+static int vfio_mem_register(VFIOContainer *container,
+                             void *vaddr, ram_addr_t size)
+{
+    struct vfio_iommu_type1_register_memory reg = {
+        .argsz = sizeof(reg),
+        .vaddr = (__u64)(uintptr_t)vaddr,
+        .size = size,
+    };
+    long ret = ioctl(container->fd, VFIO_IOMMU_REGISTER_MEMORY, &reg);
+
+    DPRINTF("(%u) %s %u: va=%lx size=%lx, ret=%ld\n", getpid(),
+            __func__, __LINE__, reg.vaddr, reg.size, ret);
+
+    return ret;
+}
+
+static int vfio_mem_unregister(VFIOContainer *container,
+                               void *vaddr, ram_addr_t size)
+{
+    struct vfio_iommu_type1_unregister_memory reg = {
+        .argsz = sizeof(reg),
+        .vaddr = (__u64)(uintptr_t)vaddr,
+        .size = size,
+    };
+    long ret = ioctl(container->fd, VFIO_IOMMU_UNREGISTER_MEMORY, &reg);
+
+    DPRINTF("(%u) %s %u: va=%lx size=%lx, ret=%ld\n", getpid(),
+            __func__, __LINE__, reg.vaddr, reg.size, ret);
+
+    return ret;
+}
+
+static void vfio_ram_region_add(MemoryListener *listener,
+                                MemoryRegionSection *section)
+{
+    VFIOContainer *container = container_of(listener, VFIOContainer,
+                                            iommu_data.type1.ramlistener);
+    hwaddr end;
+    Int128 llend;
+    void *vaddr;
+
+    if (!memory_region_is_ram(section->mr) ||
+        memory_region_is_skip_dump(section->mr)) {
+        return;
+    }
+
+    llend = int128_make64(section->offset_within_address_space);
+    llend = int128_add(llend, section->size);
+    llend = int128_and(llend, int128_exts64(TARGET_PAGE_MASK));
+
+    memory_region_ref(section->mr);
+
+    end = int128_get64(llend);
+    vaddr = memory_region_get_ram_ptr(section->mr) +
+        section->offset_within_region;
+    vfio_mem_register(container, vaddr, end);
+}
+
+static void vfio_ram_region_del(MemoryListener *listener,
+                                MemoryRegionSection *section)
+{
+    VFIOContainer *container = container_of(listener, VFIOContainer,
+                                            iommu_data.type1.ramlistener);
+    hwaddr iova, end;
+    void *vaddr;
+
+    if (!memory_region_is_ram(section->mr) ||
+        memory_region_is_skip_dump(section->mr)) {
+        return;
+    }
+
+
+    iova = TARGET_PAGE_ALIGN(section->offset_within_address_space);
+    end = (section->offset_within_address_space + int128_get64(section->size)) &
+        TARGET_PAGE_MASK;
+    vaddr = memory_region_get_ram_ptr(section->mr) +
+        section->offset_within_region +
+        (iova - section->offset_within_address_space);
+
+    vfio_mem_unregister(container, vaddr, end - iova);
+}
+
+static MemoryListener vfio_ram_listener = {
+    .region_add = vfio_ram_region_add,
+    .region_del = vfio_ram_region_del,
+};
+
+static void vfio_spapr_listener_release(VFIOContainer *container)
+{
+    memory_listener_unregister(&container->iommu_data.type1.listener);
+    memory_listener_unregister(&container->iommu_data.type1.ramlistener);
+}
+
 /*
  * Interrupt setup
  */
@@ -3729,6 +3823,10 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
+        container->iommu_data.type1.ramlistener = vfio_ram_listener;
+        memory_listener_register(&container->iommu_data.type1.ramlistener,
+                                 &address_space_memory);
+
         /*
          * The host kernel code implementing VFIO_IOMMU_DISABLE is called
          * when container fd is closed so we do not call it explicitly
@@ -3742,7 +3840,7 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
         }
 
         container->iommu_data.type1.listener = vfio_memory_listener;
-        container->iommu_data.release = vfio_listener_release;
+        container->iommu_data.release = vfio_spapr_listener_release;
 
         memory_listener_register(&container->iommu_data.type1.listener,
                                  container->space->as);
