@@ -862,6 +862,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     int bus_off, i, j;
     char nodename[256];
     uint32_t bus_range[] = { cpu_to_be32(0), cpu_to_be32(0xff) };
+    const uint64_t win32size = (1ULL << 32) - SPAPR_PCI_MEM_WIN_BUS_OFFSET;
     struct {
         uint32_t hi;
         uint64_t child;
@@ -876,7 +877,12 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         {
             cpu_to_be32(b_ss(2)), cpu_to_be64(SPAPR_PCI_MEM_WIN_BUS_OFFSET),
             cpu_to_be64(phb->mem_win_addr),
-            cpu_to_be64(memory_region_size(&phb->memwindow)),
+            cpu_to_be64(win32size),
+        },
+        {
+            cpu_to_be32(b_ss(3)), cpu_to_be64(1ULL << 32),
+            cpu_to_be64(phb->mem_win_addr + win32size),
+            cpu_to_be64(memory_region_size(&phb->memwindow) - win32size)
         },
     };
     uint64_t bus_reg[] = { cpu_to_be64(phb->buid), 0 };
