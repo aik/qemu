@@ -66,6 +66,7 @@ struct VFIOGroup;
 
 typedef struct VFIOType1 {
     MemoryListener listener;
+    MemoryListener ramlistener;
     int error;
     bool initialized;
 } VFIOType1;
@@ -144,7 +145,7 @@ int vfio_get_device(VFIOGroup *group, const char *name,
                     VFIODevice *vbasedev);
 
 extern const MemoryRegionOps vfio_region_ops;
-extern const MemoryListener vfio_memory_listener;
+extern const MemoryListener vfio_memory_listener, vfio_ram_listener;
 extern QLIST_HEAD(vfio_group_head, VFIOGroup) vfio_group_list;
 extern QLIST_HEAD(vfio_as_head, VFIOAddressSpace) vfio_address_spaces;
 
