@@ -757,6 +757,7 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT64("io_win_addr", sPAPRPHBState, io_win_addr, -1),
     DEFINE_PROP_UINT64("io_win_size", sPAPRPHBState, io_win_size,
                        SPAPR_PCI_IO_WIN_SIZE),
+    DEFINE_PROP_BOOL("ddw", sPAPRPHBState, ddw_enabled, true),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -972,6 +973,12 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     uint32_t interrupt_map_mask[] = {
         cpu_to_be32(b_ddddd(-1)|b_fff(0)), 0x0, 0x0, cpu_to_be32(-1)};
     uint32_t interrupt_map[PCI_SLOT_MAX * PCI_NUM_PINS][7];
+    uint32_t ddw_applicable[] = {
+        cpu_to_be32(RTAS_IBM_QUERY_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_CREATE_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_REMOVE_PE_DMA_WINDOW)
+    };
+    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(phb);
 
     /* Start populating the FDT */
     sprintf(nodename, "pci@%" PRIx64, phb->buid);
@@ -1000,6 +1007,24 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     _FDT(fdt_setprop(fdt, bus_off, "reg", &bus_reg, sizeof(bus_reg)));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pci-config-space-type", 0x1));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pe-total-#msi", XICS_IRQS));
+
+    /* Dynamic DMA window */
+    if (phb->ddw_enabled &&
+        spc->ddw_query && spc->ddw_create && spc->ddw_remove) {
+        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable", &ddw_applicable,
+                         sizeof(ddw_applicable)));
+
+        if (spc->ddw_reset) {
+            uint32_t ddw_extensions[] = {
+                cpu_to_be32(1),
+                cpu_to_be32(RTAS_IBM_RESET_PE_DMA_WINDOW)
+            };
+
+            /* When enabled, the guest will remove the default 32bit window */
+            _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-extensions",
+                             &ddw_extensions, sizeof(ddw_extensions)));
+        }
+    }
 
     /* Build the interrupt-map, this must matches what is done
      * in pci_spapr_map_irq

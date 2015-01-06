@@ -1715,6 +1715,11 @@ static void spapr_machine_2_1_class_init(ObjectClass *oc, void *data)
     MachineClass *mc = MACHINE_CLASS(oc);
     static GlobalProperty compat_props[] = {
         HW_COMPAT_2_1,
+        {
+            .driver   = TYPE_SPAPR_PCI_HOST_BRIDGE,
+            .property = "ddw",
+            .value    = stringify(off),
+        },
         { /* end of list */ }
     };
 
