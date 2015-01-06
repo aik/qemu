@@ -2301,7 +2301,7 @@ static void vfio_unmap_bar(VFIOPCIDevice *vdev, int nr)
 static void vfio_map_bar(VFIOPCIDevice *vdev, int nr)
 {
     VFIOBAR *bar = &vdev->bars[nr];
-    unsigned size = bar->region.size;
+    unsigned long size = bar->region.size;
     char name[64];
     uint32_t pci_bar;
     uint8_t type;
