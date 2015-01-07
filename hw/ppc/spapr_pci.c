@@ -470,6 +470,108 @@ static const MemoryRegionOps spapr_msi_ops = {
 };
 
 /*
+ * Dynamic DMA windows
+ */
+static int spapr_pci_ddw_query(sPAPRPHBState *sphb,
+                               uint32_t *windows_available,
+                               uint32_t *page_size_mask,
+                               uint32_t *dma32_window_size)
+{
+    *windows_available = SPAPR_PCI_DDW_MAX_WINDOWS - sphb->windows_num;
+    *page_size_mask = DDW_PGSIZE_64K | DDW_PGSIZE_16M;
+    *dma32_window_size = SPAPR_PCI_TCE32_WIN_SIZE;
+
+    return 0;
+}
+
+static int spapr_pci_ddw_create(sPAPRPHBState *sphb, uint32_t liobn,
+                                uint32_t page_shift, uint32_t window_shift,
+                                sPAPRTCETable **ptcet)
+{
+    uint64_t bus_offset = sphb->windows_num ? SPAPR_PCI_TCE64_START : 0;
+
+    if (((page_shift != 16) && (page_shift != 24) && (page_shift != 12)) ||
+        (sphb->windows_num >= SPAPR_PCI_DDW_MAX_WINDOWS)) {
+        return -1;
+    }
+
+    *ptcet = spapr_tce_new_table(DEVICE(sphb), liobn,
+                                 bus_offset,
+                                 page_shift,
+                                 1ULL << (window_shift - page_shift),
+                                 false);
+    if (!*ptcet) {
+        return -1;
+    }
+    memory_region_add_subregion(&sphb->iommu_root, (*ptcet)->bus_offset,
+                                spapr_tce_get_iommu(*ptcet));
+
+    ++sphb->windows_num;
+
+    return 0;
+}
+
+int spapr_pci_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
+{
+    memory_region_del_subregion(&sphb->iommu_root,
+                                spapr_tce_get_iommu(tcet));
+    spapr_tce_free_table(tcet);
+
+    return 0;
+}
+
+static int spapr_pci_remove_ddw_cb(Object *child, void *opaque)
+{
+    sPAPRTCETable *tcet;
+
+    tcet = (sPAPRTCETable *) object_dynamic_cast(child, TYPE_SPAPR_TCE_TABLE);
+
+    if (tcet) {
+        sPAPRPHBState *sphb = opaque;
+        sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
+
+        spc->ddw_remove(sphb, tcet);
+    }
+
+    return 0;
+}
+
+int spapr_pci_ddw_reset(sPAPRPHBState *sphb)
+{
+    int ret;
+    sPAPRPHBClass *spc;
+    sPAPRTCETable *tcet;
+    uint32_t windows_available = 0, page_size_mask = 0, dma32_window_size = 0;
+
+    /* Remove all windows */
+    object_child_foreach(OBJECT(sphb), spapr_pci_remove_ddw_cb, sphb);
+
+    /* Create default 32bit window */
+    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
+    if (!spc->ddw_create || !spc->ddw_query) {
+        return -1;
+    }
+
+    ret = spc->ddw_query(sphb, &windows_available, &page_size_mask,
+                         &dma32_window_size);
+    if (ret) {
+        return ret;
+    }
+
+    sphb->ddw_enabled = (windows_available > 1);
+
+    ret = spc->ddw_create(sphb, SPAPR_PCI_LIOBN(sphb->index, 0),
+                          SPAPR_TCE_PAGE_SHIFT, ctzl(dma32_window_size), &tcet);
+    if (ret) {
+        return ret;
+    }
+
+    object_unref(OBJECT(tcet));
+
+    return 0;
+}
+
+/*
  * PHB PCI device
  */
 static AddressSpace *spapr_pci_dma_iommu(PCIBus *bus, void *opaque, int devfn)
@@ -484,7 +586,6 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     SysBusDevice *s = SYS_BUS_DEVICE(dev);
     sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(s);
     PCIHostState *phb = PCI_HOST_BRIDGE(s);
-    sPAPRPHBClass *info = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(s);
     char *namebuf;
     int i;
     PCIBus *bus;
@@ -622,37 +723,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         sphb->lsi_table[i].irq = irq;
     }
 
-    if (!info->finish_realize) {
-        error_setg(errp, "finish_realize not defined");
-        return;
-    }
-
-    info->finish_realize(sphb, errp);
-
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
-}
-
-static void spapr_phb_finish_realize(sPAPRPHBState *sphb, Error **errp)
-{
-    sPAPRTCETable *tcet;
-
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn,
-                               0,
-                               SPAPR_TCE_PAGE_SHIFT,
-                               0x40000000 >> SPAPR_TCE_PAGE_SHIFT, false);
-    if (!tcet) {
-        error_setg(errp, "Unable to create TCE table for %s",
-                   sphb->dtbusname);
-        return ;
-    }
-
-    /* Register default 32bit DMA window */
-    memory_region_add_subregion(&sphb->iommu_root, 0,
-                                spapr_tce_get_iommu(tcet));
-
-    object_unref(OBJECT(tcet));
-
-    sphb->windows_num = 1;
 }
 
 static int spapr_phb_children_reset(Object *child, void *opaque)
@@ -668,7 +739,11 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
 
 static void spapr_phb_reset(DeviceState *qdev)
 {
-    /* Reset the IOMMU state */
+    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(qdev);
+
+    if (spc->ddw_reset) {
+        spc->ddw_reset(SPAPR_PCI_HOST_BRIDGE(qdev));
+    }
     object_child_foreach(OBJECT(qdev), spapr_phb_children_reset, NULL);
 }
 
@@ -804,7 +879,10 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     dc->vmsd = &vmstate_spapr_pci;
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->cannot_instantiate_with_device_add_yet = false;
-    spc->finish_realize = spapr_phb_finish_realize;
+    spc->ddw_query = spapr_pci_ddw_query;
+    spc->ddw_create = spapr_pci_ddw_create;
+    spc->ddw_remove = spapr_pci_ddw_remove;
+    spc->ddw_reset = spapr_pci_ddw_reset;
 }
 
 static const TypeInfo spapr_phb_info = {
