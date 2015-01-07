@@ -293,17 +293,30 @@ static void rtas_ibm_os_term(PowerPCCPU *cpu,
 static struct rtas_call {
     const char *name;
     spapr_rtas_fn fn;
+    spapr_rtas_fn fn_wa; /* workaround helper */
 } rtas_table[RTAS_TOKEN_MAX - RTAS_TOKEN_BASE];
 
 target_ulong spapr_rtas_call(PowerPCCPU *cpu, sPAPREnvironment *spapr,
                              uint32_t token, uint32_t nargs, target_ulong args,
                              uint32_t nret, target_ulong rets)
 {
+    uint32_t tokensw = bswap32(token);
+
     if ((token >= RTAS_TOKEN_BASE) && (token < RTAS_TOKEN_MAX)) {
         struct rtas_call *call = rtas_table + (token - RTAS_TOKEN_BASE);
 
         if (call->fn) {
             call->fn(cpu, spapr, token, nargs, args, nret, rets);
+            return H_SUCCESS;
+        }
+    }
+
+    /* Workaround for LE guests */
+    if ((tokensw >= RTAS_TOKEN_BASE) && (tokensw < RTAS_TOKEN_MAX)) {
+        struct rtas_call *call = rtas_table + (tokensw - RTAS_TOKEN_BASE);
+
+        if (call->fn_wa) {
+            call->fn_wa(cpu, spapr, tokensw, nargs, args, nret, rets);
             return H_SUCCESS;
         }
     }
@@ -338,6 +351,22 @@ void spapr_rtas_register(int token, const char *name, spapr_rtas_fn fn)
 
     rtas_table[token].name = name;
     rtas_table[token].fn = fn;
+}
+
+void spapr_rtas_register_wrong_endian(int token, spapr_rtas_fn fn)
+{
+    if (!((token >= RTAS_TOKEN_BASE) && (token < RTAS_TOKEN_MAX))) {
+        fprintf(stderr, "RTAS invalid token 0x%x\n", token);
+        exit(1);
+    }
+
+    token -= RTAS_TOKEN_BASE;
+    if (!rtas_table[token].fn) {
+        fprintf(stderr, "RTAS token %x must be initialized to allow workaround\n",
+                token);
+        exit(1);
+    }
+    rtas_table[token].fn_wa = fn;
 }
 
 int spapr_rtas_device_tree_setup(void *fdt, hwaddr rtas_addr,

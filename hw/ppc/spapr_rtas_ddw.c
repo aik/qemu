@@ -265,6 +265,41 @@ param_error_exit:
     rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
 }
 
+#define SPAPR_RTAS_DDW_SWAP(n) rtas_st(rets, (n), bswap32(rtas_ld(rets, (n))))
+
+static void rtas_ibm_query_pe_dma_window_wrong_endian(PowerPCCPU *cpu,
+                                                      sPAPREnvironment *spapr,
+                                                      uint32_t token,
+                                                      uint32_t nargs,
+                                                      target_ulong args,
+                                                      uint32_t nret,
+                                                      target_ulong rets)
+{
+    rtas_ibm_query_pe_dma_window(cpu, spapr, token, nargs, args, nret, rets);
+
+    SPAPR_RTAS_DDW_SWAP(0);
+    SPAPR_RTAS_DDW_SWAP(1);
+    SPAPR_RTAS_DDW_SWAP(2);
+    SPAPR_RTAS_DDW_SWAP(3);
+    SPAPR_RTAS_DDW_SWAP(4);
+}
+
+static void rtas_ibm_create_pe_dma_window_wrong_endian(PowerPCCPU *cpu,
+                                                       sPAPREnvironment *spapr,
+                                                       uint32_t token,
+                                                       uint32_t nargs,
+                                                       target_ulong args,
+                                                       uint32_t nret,
+                                                       target_ulong rets)
+{
+    rtas_ibm_create_pe_dma_window(cpu, spapr, token, nargs, args, nret, rets);
+
+    SPAPR_RTAS_DDW_SWAP(0);
+    SPAPR_RTAS_DDW_SWAP(1);
+    SPAPR_RTAS_DDW_SWAP(2);
+    SPAPR_RTAS_DDW_SWAP(3);
+}
+
 static void spapr_rtas_ddw_init(void)
 {
     spapr_rtas_register(RTAS_IBM_QUERY_PE_DMA_WINDOW,
@@ -279,6 +314,11 @@ static void spapr_rtas_ddw_init(void)
     spapr_rtas_register(RTAS_IBM_RESET_PE_DMA_WINDOW,
                         "ibm,reset-pe-dma-window",
                         rtas_ibm_reset_pe_dma_window);
+
+    spapr_rtas_register_wrong_endian(RTAS_IBM_QUERY_PE_DMA_WINDOW,
+                                     rtas_ibm_query_pe_dma_window_wrong_endian);
+    spapr_rtas_register_wrong_endian(RTAS_IBM_CREATE_PE_DMA_WINDOW,
+                                     rtas_ibm_create_pe_dma_window_wrong_endian);
 }
 
 type_init(spapr_rtas_ddw_init)
