@@ -32,11 +32,10 @@ static int spapr_pci_vfio_ddw_query(sPAPRPHBState *sphb,
                                     uint32_t *page_size_mask,
                                     uint32_t *dma32_window_size)
 {
-    sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
     struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
     int ret;
 
-    ret = vfio_container_ioctl(&sphb->iommu_as, svphb->iommugroupid,
+    ret = vfio_container_ioctl(&sphb->iommu_as,
                                VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
     if (ret) {
         return ret;
@@ -53,7 +52,6 @@ static int spapr_pci_vfio_ddw_create(sPAPRPHBState *sphb, uint32_t liobn,
                                      uint32_t page_shift, uint32_t window_shift,
                                      sPAPRTCETable **ptcet)
 {
-    sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
     struct vfio_iommu_spapr_tce_create create = {
         .argsz = sizeof(create),
         .page_shift = page_shift,
@@ -63,7 +61,7 @@ static int spapr_pci_vfio_ddw_create(sPAPRPHBState *sphb, uint32_t liobn,
     };
     int ret;
 
-    ret = vfio_container_ioctl(&sphb->iommu_as, svphb->iommugroupid,
+    ret = vfio_container_ioctl(&sphb->iommu_as,
                                VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
     if (ret) {
         return ret;
@@ -87,7 +85,6 @@ static int spapr_pci_vfio_ddw_create(sPAPRPHBState *sphb, uint32_t liobn,
 
 static int spapr_pci_vfio_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
 {
-    sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
     struct vfio_iommu_spapr_tce_remove remove = {
         .argsz = sizeof(remove),
         .start_addr = tcet->bus_offset
@@ -95,7 +92,7 @@ static int spapr_pci_vfio_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
     int ret;
 
     spapr_pci_ddw_remove(sphb, tcet);
-    ret = vfio_container_ioctl(&sphb->iommu_as, svphb->iommugroupid,
+    ret = vfio_container_ioctl(&sphb->iommu_as,
                                VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
 
     return ret;
