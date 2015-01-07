@@ -901,7 +901,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
 
     /* Write PHB properties */
     _FDT(fdt_setprop_string(fdt, bus_off, "device_type", "pci"));
-    _FDT(fdt_setprop_string(fdt, bus_off, "compatible", "IBM,Logical_PHB"));
+    _FDT(fdt_setprop_string(fdt, bus_off, "compatible", "ibm,ioda2-phb"));
     _FDT(fdt_setprop_cell(fdt, bus_off, "#address-cells", 0x3));
     _FDT(fdt_setprop_cell(fdt, bus_off, "#size-cells", 0x2));
     _FDT(fdt_setprop_cell(fdt, bus_off, "#interrupt-cells", 0x1));
