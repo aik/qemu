@@ -322,6 +322,18 @@ static void spapr_vio_quiesce_one(VIOsPAPRDevice *dev)
     free_crq(dev);
 }
 
+static void spapr_vio_set_bypass(VIOsPAPRDevice *dev, bool bypass)
+{
+    if (dev->bypass == bypass) {
+        return;
+    }
+
+    memory_region_set_enabled(&dev->mrbypass, bypass);
+    memory_region_set_enabled(spapr_tce_get_iommu(dev->tcet), !bypass);
+
+    dev->bypass = bypass;
+}
+
 static void rtas_set_tce_bypass(PowerPCCPU *cpu, sPAPREnvironment *spapr,
                                 uint32_t token,
                                 uint32_t nargs, target_ulong args,
@@ -348,7 +360,7 @@ static void rtas_set_tce_bypass(PowerPCCPU *cpu, sPAPREnvironment *spapr,
         return;
     }
 
-    spapr_tce_set_bypass(dev->tcet, !!enable);
+    spapr_vio_set_bypass(dev, !!enable);
 
     rtas_st(rets, 0, RTAS_OUT_SUCCESS);
 }
@@ -407,6 +419,7 @@ static void spapr_vio_busdev_reset(DeviceState *qdev)
 
     dev->signal_state = 0;
 
+    spapr_vio_set_bypass(dev, false);
     if (pc->reset) {
         pc->reset(dev);
     }
@@ -456,13 +469,24 @@ static int spapr_vio_busdev_init(DeviceState *qdev)
 
     if (pc->rtce_window_size) {
         uint32_t liobn = SPAPR_VIO_BASE_LIOBN | dev->reg;
+
+        memory_region_init(&dev->mrroot, OBJECT(dev), "iommu-spapr-root",
+                           ram_size);
+        memory_region_init_alias(&dev->mrbypass, OBJECT(dev),
+                                 "iommu-spapr-bypass", get_system_memory(),
+                                 0, ram_size);
+        memory_region_add_subregion_overlap(&dev->mrroot, 0, &dev->mrbypass, 1);
+        address_space_init(&dev->as, &dev->mrroot, qdev->id);
+
         dev->tcet = spapr_tce_new_table(qdev, liobn,
                                         0,
                                         SPAPR_TCE_PAGE_SHIFT,
                                         pc->rtce_window_size >>
                                         SPAPR_TCE_PAGE_SHIFT, false);
-        address_space_init(&dev->as, spapr_tce_get_iommu(dev->tcet), qdev->id);
+        memory_region_add_subregion_overlap(&dev->mrroot, 0,
+                                            spapr_tce_get_iommu(dev->tcet), 2);
     }
+
 
     return pc->init(dev);
 }
@@ -541,6 +565,15 @@ static void spapr_vio_bridge_class_init(ObjectClass *klass, void *data)
     k->init = spapr_vio_bridge_init;
 }
 
+static int spapr_vio_post_load(void *opaque, int version_id)
+{
+    VIOsPAPRDevice *dev = VIO_SPAPR_DEVICE(opaque);
+
+    spapr_vio_set_bypass(dev, dev->bypass);
+
+    return 0;
+}
+
 static const TypeInfo spapr_vio_bridge_info = {
     .name          = "spapr-vio-bridge",
     .parent        = TYPE_SYS_BUS_DEVICE,
@@ -550,8 +583,9 @@ static const TypeInfo spapr_vio_bridge_info = {
 
 const VMStateDescription vmstate_spapr_vio = {
     .name = "spapr_vio",
-    .version_id = 1,
+    .version_id = 2,
     .minimum_version_id = 1,
+    .post_load = spapr_vio_post_load,
     .fields = (VMStateField[]) {
         /* Sanity check */
         VMSTATE_UINT32_EQUAL(reg, VIOsPAPRDevice),
@@ -562,6 +596,8 @@ const VMStateDescription vmstate_spapr_vio = {
         VMSTATE_UINT64(crq.qladdr, VIOsPAPRDevice),
         VMSTATE_UINT32(crq.qsize, VIOsPAPRDevice),
         VMSTATE_UINT32(crq.qnext, VIOsPAPRDevice),
+
+        VMSTATE_BOOL_V(bypass, VIOsPAPRDevice, 2),
 
         VMSTATE_END_OF_LIST()
     },

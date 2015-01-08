@@ -64,6 +64,9 @@ struct VIOsPAPRDevice {
     target_ulong signal_state;
     VIOsPAPR_CRQ crq;
     AddressSpace as;
+    bool bypass;
+    MemoryRegion mrroot;
+    MemoryRegion mrbypass;
     sPAPRTCETable *tcet;
 };
 

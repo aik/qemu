@@ -72,9 +72,7 @@ static IOMMUTLBEntry spapr_tce_translate_iommu(MemoryRegion *iommu, hwaddr addr,
         .perm = IOMMU_NONE,
     };
 
-    if (tcet->bypass) {
-        ret.perm = IOMMU_RW;
-    } else if ((addr >> tcet->page_shift) < tcet->nb_table) {
+    if ((addr >> tcet->page_shift) < tcet->nb_table) {
         /* Check if we are in bound */
         hwaddr page_mask = IOMMU_PAGE_MASK(tcet->page_shift);
 
@@ -100,7 +98,7 @@ static const VMStateDescription vmstate_spapr_tce_table = {
         VMSTATE_UINT32_EQUAL(nb_table, sPAPRTCETable),
 
         /* IOMMU state */
-        VMSTATE_BOOL(bypass, sPAPRTCETable),
+        VMSTATE_UNUSED(sizeof(bool)),
         VMSTATE_VARRAY_UINT32(table, sPAPRTCETable, nb_table, 0, vmstate_info_uint64, uint64_t),
 
         VMSTATE_END_OF_LIST()
@@ -131,7 +129,8 @@ static int spapr_tce_table_realize(DeviceState *dev)
     trace_spapr_iommu_new_table(tcet->liobn, tcet, tcet->table, tcet->fd);
 
     memory_region_init_iommu(&tcet->iommu, OBJECT(dev), &spapr_iommu_ops,
-                             "iommu-spapr", ram_size);
+                             "iommu-spapr",
+                             (uint64_t)tcet->nb_table << tcet->page_shift);
 
     QLIST_INSERT_HEAD(&spapr_tce_tables, tcet, list);
 
@@ -191,17 +190,11 @@ MemoryRegion *spapr_tce_get_iommu(sPAPRTCETable *tcet)
     return &tcet->iommu;
 }
 
-void spapr_tce_set_bypass(sPAPRTCETable *tcet, bool bypass)
-{
-    tcet->bypass = bypass;
-}
-
 static void spapr_tce_reset(DeviceState *dev)
 {
     sPAPRTCETable *tcet = SPAPR_TCE_TABLE(dev);
     size_t table_size = tcet->nb_table * sizeof(uint64_t);
 
-    tcet->bypass = false;
     memset(tcet->table, 0, table_size);
 }
 
