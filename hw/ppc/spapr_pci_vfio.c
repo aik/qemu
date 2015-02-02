@@ -100,6 +100,17 @@ static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
     nb_table = 1ULL << (create.window_shift - page_shift);
     spapr_tce_set_props(tcet, create.start_addr, page_shift, nb_table, true);
     spapr_tce_table_enable(tcet);
+
+    if (!tcet->vfio_accel) {
+        return;
+    }
+
+    ret = vfio_container_spapr_set_liobn(&sphb->iommu_as,
+                                         tcet->liobn, tcet->bus_offset);
+    if (ret) {
+        error_setg_errno(errp, -ret,
+                         "spapr-vfio: failed to create link to IOMMU");
+    }
 }
 
 static int spapr_pci_vfio_ddw_query(sPAPRPHBState *sphb,

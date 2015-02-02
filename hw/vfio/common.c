@@ -822,3 +822,47 @@ int vfio_container_ioctl(AddressSpace *as,
 
     return vfio_container_do_ioctl(as, req, param);
 }
+
+int vfio_container_spapr_set_liobn(AddressSpace *as,
+                                   uint64_t liobn,
+                                   uint64_t start_addr)
+{
+#ifdef CONFIG_KVM
+    int ret;
+    struct kvm_vfio_spapr_tce_liobn param = {
+        .argsz = sizeof(param),
+        .fd = -1,
+        .liobn = liobn,
+        .start_addr = start_addr
+    };
+    struct kvm_device_attr attr = {
+        .group = KVM_DEV_VFIO_GROUP,
+        .attr = KVM_DEV_VFIO_GROUP_SET_SPAPR_TCE_LIOBN,
+        .addr = (uint64_t)(unsigned long)&param,
+    };
+    VFIOGroup *group;
+    VFIOContainer *container;
+    VFIOAddressSpace *space;
+
+    if (vfio_kvm_device_fd < 0) {
+        return 0;
+    }
+
+    space = vfio_get_address_space(as);
+    container = QLIST_FIRST(&space->containers);
+
+    QLIST_FOREACH(group, &container->group_list, next) {
+        param.fd = group->fd;
+        ret = ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr);
+        if (ret) {
+            error_report("vfio: failed to setup liobn for a group: %s",
+                         strerror(errno));
+            break;
+        }
+    }
+
+    return ret;
+#else
+    return 0;
+#endif
+}
