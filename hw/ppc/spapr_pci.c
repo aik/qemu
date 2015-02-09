@@ -472,14 +472,25 @@ static const MemoryRegionOps spapr_msi_ops = {
 /*
  * DMA windows
  */
+static int spapr_phb_disable_dma_windows(Object *child, void *opaque)
+{
+    sPAPRTCETable *tcet = (sPAPRTCETable *)
+        object_dynamic_cast(child, TYPE_SPAPR_TCE_TABLE);
+
+    if (tcet) {
+        spapr_tce_table_disable(tcet);
+    }
+
+    return 0;
+}
+
 int spapr_phb_dma_reset(sPAPRPHBState *sphb)
 {
     const uint32_t liobn = SPAPR_PCI_LIOBN(sphb->index, 0);
-    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
     sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
     Error *err = NULL;
 
-    spapr_tce_table_disable(tcet);
+    object_child_foreach(OBJECT(sphb), spapr_phb_disable_dma_windows, NULL);
     spc->init_dma_window(sphb, liobn, SPAPR_TCE_PAGE_SHIFT, 0, &err);
 
     return 0;
