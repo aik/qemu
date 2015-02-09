@@ -480,7 +480,7 @@ int spapr_phb_dma_reset(sPAPRPHBState *sphb)
     Error *err = NULL;
 
     spapr_tce_table_disable(tcet);
-    spc->finish_realize(sphb, &err);
+    spc->init_dma_window(sphb, liobn, SPAPR_TCE_PAGE_SHIFT, 0, &err);
 
     return 0;
 }
@@ -652,14 +652,17 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 }
 
-static void spapr_phb_finish_realize(sPAPRPHBState *sphb, Error **errp)
+static void spapr_phb_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
+                           uint32_t page_shift, uint32_t window_shift_hint,
+                           Error **errp)
 {
     sPAPRTCETable *tcet;
     uint32_t nb_table;
+    uint64_t bus_offset = 0;
 
     tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
     nb_table = SPAPR_PCI_DMA32_SIZE >> SPAPR_TCE_PAGE_SHIFT;
-    spapr_tce_set_props(tcet, 0, SPAPR_TCE_PAGE_SHIFT, nb_table, false);
+    spapr_tce_set_props(tcet, bus_offset, page_shift, nb_table, false);
     spapr_tce_table_enable(tcet);
 }
 
@@ -813,7 +816,7 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     dc->vmsd = &vmstate_spapr_pci;
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->cannot_instantiate_with_device_add_yet = false;
-    spc->finish_realize = spapr_phb_finish_realize;
+    spc->init_dma_window = spapr_phb_init_dma_window;
 }
 
 static const TypeInfo spapr_phb_info = {

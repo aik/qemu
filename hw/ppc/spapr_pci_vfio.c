@@ -27,14 +27,15 @@ static Property spapr_phb_vfio_properties[] = {
     DEFINE_PROP_END_OF_LIST(),
 };
 
-static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
+static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
+                           uint32_t page_shift, uint32_t window_shift_hint,
+                           Error **errp)
 {
     sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
     struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
     int ret;
-    sPAPRTCETable *tcet;
-    uint32_t liobn = svphb->phb.dma_liobn;
     uint32_t nb_table;
+    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
 
     ret = vfio_container_ioctl(&svphb->phb.iommu_as,
                                VFIO_CHECK_EXTENSION,
@@ -55,7 +56,7 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
 
     tcet = spapr_tce_find_by_liobn(liobn);
     nb_table = info.dma32_window_size >> SPAPR_TCE_PAGE_SHIFT;
-    spapr_tce_set_props(tcet, info.dma32_window_start, SPAPR_TCE_PAGE_SHIFT,
+    spapr_tce_set_props(tcet, info.dma32_window_start, page_shift,
                         nb_table, true);
     spapr_tce_table_enable(tcet);
 }
@@ -66,7 +67,7 @@ static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
     sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_CLASS(klass);
 
     dc->props = spapr_phb_vfio_properties;
-    spc->finish_realize = spapr_phb_vfio_finish_realize;
+    spc->init_dma_window = spapr_phb_vfio_init_dma_window;
 }
 
 static const TypeInfo spapr_phb_vfio_info = {
