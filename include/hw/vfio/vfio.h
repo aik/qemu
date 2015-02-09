@@ -3,7 +3,7 @@
 
 #include "qemu/typedefs.h"
 
-extern int vfio_container_ioctl(AddressSpace *as, int32_t groupid,
+extern int vfio_container_ioctl(AddressSpace *as,
                                 int req, void *param);
 
 #endif

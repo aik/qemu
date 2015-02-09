@@ -914,21 +914,20 @@ void vfio_put_base_device(VFIODevice *vbasedev)
     close(vbasedev->fd);
 }
 
-static int vfio_container_do_ioctl(AddressSpace *as, int32_t groupid,
+static int vfio_container_do_ioctl(AddressSpace *as,
                                    int req, void *param)
 {
-    VFIOGroup *group;
     VFIOContainer *container;
-    int ret = -1;
+    int ret;
+    VFIOAddressSpace *space;
 
-    group = vfio_get_group(groupid, as);
-    if (!group) {
-        error_report("vfio: group %d not registered", groupid);
-        return ret;
-    }
+    space = vfio_get_address_space(as);
+    container = QLIST_FIRST(&space->containers);
 
-    container = group->container;
-    if (group->container) {
+    if (!container || QLIST_NEXT(container, next)) {
+        error_report("vfio: multiple containers per PHB are not supported");
+        return -1;
+    } else {
         ret = ioctl(container->fd, req, param);
         if (ret < 0) {
             error_report("vfio: failed to ioctl %d to container: ret=%d, %s",
@@ -936,12 +935,10 @@ static int vfio_container_do_ioctl(AddressSpace *as, int32_t groupid,
         }
     }
 
-    vfio_put_group(group);
-
     return ret;
 }
 
-int vfio_container_ioctl(AddressSpace *as, int32_t groupid,
+int vfio_container_ioctl(AddressSpace *as,
                          int req, void *param)
 {
     /* We allow only certain ioctls to the container */
@@ -955,5 +952,5 @@ int vfio_container_ioctl(AddressSpace *as, int32_t groupid,
         return -1;
     }
 
-    return vfio_container_do_ioctl(as, groupid, req, param);
+    return vfio_container_do_ioctl(as, req, param);
 }
