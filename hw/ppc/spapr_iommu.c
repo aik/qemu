@@ -149,6 +149,8 @@ sPAPRTCETable *spapr_tce_new_table(DeviceState *owner, uint32_t liobn)
     tcet->liobn = liobn;
 
     snprintf(tmp, sizeof(tmp), "tce-table-%x", liobn);
+    memory_region_init(&tcet->root, OBJECT(tcet), tmp, UINT64_MAX);
+
     object_property_add_child(OBJECT(owner), tmp, OBJECT(tcet), NULL);
 
     object_property_set_bool(OBJECT(tcet), true, "realized", NULL);
@@ -199,6 +201,8 @@ void spapr_tce_table_enable(sPAPRTCETable *tcet)
                              "iommu-spapr",
                              (uint64_t)tcet->nb_table << tcet->page_shift);
 
+    memory_region_add_subregion(&tcet->root, tcet->bus_offset, &tcet->iommu);
+
     tcet->enabled = true;
 }
 
@@ -208,6 +212,8 @@ void spapr_tce_table_disable(sPAPRTCETable *tcet)
         return;
     }
 
+    memory_region_del_subregion(&tcet->root, &tcet->iommu);
+
     if (!kvm_enabled() ||
         (kvmppc_remove_spapr_tce(tcet->table, tcet->fd,
                                  tcet->nb_table) != 0)) {
@@ -215,6 +221,7 @@ void spapr_tce_table_disable(sPAPRTCETable *tcet)
         g_free(tcet->table);
     }
     tcet->table = NULL;
+    object_unref(OBJECT(&tcet->iommu));
     tcet->enabled = false;
     spapr_tce_set_props(tcet, 0, 0, 0, false);
 }
@@ -230,7 +237,7 @@ static void spapr_tce_table_unrealize(DeviceState *dev, Error **errp)
 
 MemoryRegion *spapr_tce_get_iommu(sPAPRTCETable *tcet)
 {
-    return &tcet->iommu;
+    return &tcet->root;
 }
 
 static void spapr_tce_reset(DeviceState *dev)
