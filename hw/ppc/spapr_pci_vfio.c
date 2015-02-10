@@ -53,25 +53,11 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
         return;
     }
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), liobn);
-    if (!tcet) {
-        error_setg(errp, "spapr-vfio: failed to create VFIO TCE table");
-        return;
-    }
-
-    /* Register default 32bit DMA window */
+    tcet = spapr_tce_find_by_liobn(liobn);
     nb_table = info.dma32_window_size >> SPAPR_TCE_PAGE_SHIFT;
     spapr_tce_set_props(tcet, info.dma32_window_start, SPAPR_TCE_PAGE_SHIFT,
                         nb_table, true);
     spapr_tce_table_enable(tcet);
-
-    memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
-                                spapr_tce_get_iommu(tcet));
-}
-
-static void spapr_phb_vfio_reset(DeviceState *qdev)
-{
-    /* Do nothing */
 }
 
 static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
@@ -80,7 +66,6 @@ static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
     sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_CLASS(klass);
 
     dc->props = spapr_phb_vfio_properties;
-    dc->reset = spapr_phb_vfio_reset;
     spc->finish_realize = spapr_phb_vfio_finish_realize;
 }
 

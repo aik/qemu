@@ -470,6 +470,22 @@ static const MemoryRegionOps spapr_msi_ops = {
 };
 
 /*
+ * DMA windows
+ */
+int spapr_phb_dma_reset(sPAPRPHBState *sphb)
+{
+    const uint32_t liobn = SPAPR_PCI_LIOBN(sphb->index, 0);
+    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
+    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
+    Error *err = NULL;
+
+    spapr_tce_table_disable(tcet);
+    spc->finish_realize(sphb, &err);
+
+    return 0;
+}
+
+/*
  * PHB PCI device
  */
 static AddressSpace *spapr_pci_dma_iommu(PCIBus *bus, void *opaque, int devfn)
@@ -484,11 +500,11 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     SysBusDevice *s = SYS_BUS_DEVICE(dev);
     sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(s);
     PCIHostState *phb = PCI_HOST_BRIDGE(s);
-    sPAPRPHBClass *info = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(s);
     char *namebuf;
     int i;
     PCIBus *bus;
     uint64_t msi_window_size = 4096;
+    sPAPRTCETable *tcet;
 
     if (sphb->index != -1) {
         hwaddr windows_base;
@@ -628,12 +644,10 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         sphb->lsi_table[i].irq = irq;
     }
 
-    if (!info->finish_realize) {
-        error_setg(errp, "finish_realize not defined");
-        return;
-    }
-
-    info->finish_realize(sphb, errp);
+    /* Create default DMA window */
+    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
+    memory_region_add_subregion_overlap(&sphb->iommu_root, 0,
+                                        spapr_tce_get_iommu(tcet), 0);
 
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 }
@@ -643,20 +657,10 @@ static void spapr_phb_finish_realize(sPAPRPHBState *sphb, Error **errp)
     sPAPRTCETable *tcet;
     uint32_t nb_table;
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
-    if (!tcet) {
-        error_setg(errp, "Unable to create TCE table for %s",
-                   sphb->dtbusname);
-        return ;
-    }
-
+    tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
     nb_table = SPAPR_PCI_DMA32_SIZE >> SPAPR_TCE_PAGE_SHIFT;
     spapr_tce_set_props(tcet, 0, SPAPR_TCE_PAGE_SHIFT, nb_table, false);
     spapr_tce_table_enable(tcet);
-
-    /* Register default 32bit DMA window */
-    memory_region_add_subregion(&sphb->iommu_root, 0,
-                                spapr_tce_get_iommu(tcet));
 }
 
 static int spapr_phb_children_reset(Object *child, void *opaque)
@@ -672,6 +676,8 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
 
 static void spapr_phb_reset(DeviceState *qdev)
 {
+    spapr_phb_dma_reset(SPAPR_PCI_HOST_BRIDGE(qdev));
+
     /* Reset the IOMMU state */
     object_child_foreach(OBJECT(qdev), spapr_phb_children_reset, NULL);
 }
