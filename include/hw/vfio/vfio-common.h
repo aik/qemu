@@ -26,7 +26,7 @@
 #include "qemu/queue.h"
 #include "qemu/notify.h"
 
-/*#define DEBUG_VFIO*/
+#define DEBUG_VFIO
 #ifdef DEBUG_VFIO
 #define DPRINTF(fmt, ...) \
     do { fprintf(stderr, "vfio: " fmt, ## __VA_ARGS__); } while (0)
