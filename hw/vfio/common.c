@@ -234,6 +234,7 @@ int vfio_dma_map(VFIOContainer *container, hwaddr iova,
         return 0;
     }
 
+    exit(0);
     error_report("VFIO_MAP_DMA: %d\n", -errno);
     return -errno;
 }

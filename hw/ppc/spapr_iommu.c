@@ -104,6 +104,8 @@ static int spapr_tce_table_post_load(void *opaque, int version_id)
         spapr_vio_set_bypass(tcet->vdev, tcet->bypass);
     }
 
+    printf("+++Q+++ (%u) %s %u LIOBN=%x\n", getpid(), __func__, __LINE__, tcet->liobn);
+
     if (!tcet->migtable) {
         return 0;
     }
@@ -194,6 +196,8 @@ void spapr_tce_set_props(sPAPRTCETable *tcet, uint64_t bus_offset,
     if (tcet->enabled) {
         return;
     }
+    printf("+++Q+++ (%u) %s %u table=%p %x nb_table=%d\n", getpid(), __func__, __LINE__,
+            tcet, tcet->liobn, nb_table);
     tcet->bus_offset = bus_offset;
     tcet->page_shift = page_shift;
     tcet->nb_table = nb_table;
@@ -212,6 +216,8 @@ void spapr_tce_table_enable(sPAPRTCETable *tcet)
     }
 
     if (kvm_enabled()) {
+        //tcet->table = NULL;
+        //if (0)
         tcet->table = kvmppc_create_spapr_tce(tcet->liobn,
                                               tcet->nb_table,
                                               tcet->bus_offset,

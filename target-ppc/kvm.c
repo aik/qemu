@@ -2000,6 +2000,9 @@ int kvmppc_spapr_enable_inkernel_multitce(void)
 {
     int ret;
 
+    //if (1)
+      //  return 0;
+
     ret = kvm_vm_enable_cap(kvm_state, KVM_CAP_PPC_ENABLE_HCALL, 0,
                             H_PUT_TCE_INDIRECT, 1);
     if (!ret) {

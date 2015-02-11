@@ -101,7 +101,9 @@ static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
     spapr_tce_set_props(tcet, create.start_addr, page_shift, nb_table, true);
     spapr_tce_table_enable(tcet);
 
+    //tcet->vfio_accel = false;
     if (!tcet->vfio_accel) {
+        printf("+++Q+++ (%u) %s %u NO IN-KERNEL ACCELERATION FOR VFIO\n", getpid(), __func__, __LINE__);
         return;
     }
 
@@ -110,6 +112,10 @@ static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
     if (ret) {
         error_setg_errno(errp, -ret,
                          "spapr-vfio: failed to create link to IOMMU");
+        printf("+++Q+++ (%u) %s %u FALLBACK TO EMULATION\n", getpid(), __func__, __LINE__);
+
+    //    kvmppc_remove_spapr_tce(tcet->table, tcet->fd,
+      //                          tcet->nb_table);
     }
 }
 
