@@ -35,6 +35,7 @@ int kvmppc_booke_watchdog_enable(PowerPCCPU *cpu);
 #ifndef CONFIG_USER_ONLY
 off_t kvmppc_alloc_rma(void **rma);
 bool kvmppc_spapr_use_multitce(void);
+int kvmppc_spapr_enable_inkernel_multitce(void);
 void *kvmppc_create_spapr_tce(uint32_t liobn, uint32_t nb_table,
                               uint64_t bus_offset, uint32_t page_shift,
                               int *pfd, bool vfio_accel);
@@ -155,6 +156,11 @@ static inline off_t kvmppc_alloc_rma(void **rma)
 static inline bool kvmppc_spapr_use_multitce(void)
 {
     return false;
+}
+
+static inline int kvmppc_spapr_enable_inkernel_multitce(void)
+{
+    return -1;
 }
 
 static inline void *kvmppc_create_spapr_tce(uint32_t liobn,

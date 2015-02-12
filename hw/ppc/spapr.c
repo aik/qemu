@@ -1642,6 +1642,10 @@ static void ppc_spapr_init(MachineState *machine)
                                             boot_device, kernel_cmdline,
                                             spapr->epow_irq);
     assert(spapr->fdt_skel != NULL);
+
+    if (kvm_enabled()) {
+        kvmppc_spapr_enable_inkernel_multitce();
+    }
 }
 
 static int spapr_kvm_type(const char *vm_type)

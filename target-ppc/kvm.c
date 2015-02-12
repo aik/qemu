@@ -107,7 +107,7 @@ int kvm_arch_init(KVMState *s)
     cap_spapr_tce = kvm_check_extension(s, KVM_CAP_SPAPR_TCE);
     cap_spapr_tce_64 = kvm_check_extension(s, KVM_CAP_SPAPR_TCE_64);
     cap_spapr_multitce = kvm_check_extension(s, KVM_CAP_SPAPR_MULTITCE);
-    cap_spapr_vfio = false;
+    cap_spapr_vfio = true;
     cap_one_reg = kvm_check_extension(s, KVM_CAP_ONE_REG);
     cap_hior = kvm_check_extension(s, KVM_CAP_PPC_HIOR);
     cap_epr = kvm_check_extension(s, KVM_CAP_PPC_EPR);
@@ -1994,6 +1994,20 @@ uint64_t kvmppc_rma_size(uint64_t current_size, unsigned int hash_shift)
 bool kvmppc_spapr_use_multitce(void)
 {
     return cap_spapr_multitce;
+}
+
+int kvmppc_spapr_enable_inkernel_multitce(void)
+{
+    int ret;
+
+    ret = kvm_vm_enable_cap(kvm_state, KVM_CAP_PPC_ENABLE_HCALL, 0,
+                            H_PUT_TCE_INDIRECT, 1);
+    if (!ret) {
+        ret = kvm_vm_enable_cap(kvm_state, KVM_CAP_PPC_ENABLE_HCALL, 0,
+                                H_STUFF_TCE, 1);
+    }
+
+    return ret;
 }
 
 void *kvmppc_create_spapr_tce(uint32_t liobn, uint32_t nb_table,
