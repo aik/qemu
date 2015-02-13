@@ -34,6 +34,7 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
     int ret;
     sPAPRTCETable *tcet;
     uint32_t liobn = svphb->phb.dma_liobn;
+    uint32_t nb_table;
 
     ret = vfio_container_ioctl(&svphb->phb.iommu_as,
                                VFIO_CHECK_EXTENSION,
@@ -52,16 +53,18 @@ static void spapr_phb_vfio_finish_realize(sPAPRPHBState *sphb, Error **errp)
         return;
     }
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), liobn, info.dma32_window_start,
-                               SPAPR_TCE_PAGE_SHIFT,
-                               info.dma32_window_size >> SPAPR_TCE_PAGE_SHIFT,
-                               true);
+    tcet = spapr_tce_new_table(DEVICE(sphb), liobn);
     if (!tcet) {
         error_setg(errp, "spapr-vfio: failed to create VFIO TCE table");
         return;
     }
 
     /* Register default 32bit DMA window */
+    nb_table = info.dma32_window_size >> SPAPR_TCE_PAGE_SHIFT;
+    spapr_tce_set_props(tcet, info.dma32_window_start, SPAPR_TCE_PAGE_SHIFT,
+                        nb_table, true);
+    spapr_tce_table_enable(tcet);
+
     memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
                                 spapr_tce_get_iommu(tcet));
 }
