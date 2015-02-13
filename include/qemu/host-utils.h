@@ -361,6 +361,16 @@ static inline int ctpop64(uint64_t val)
 #endif
 }
 
+static inline int up_pow_of_two(uint64_t x)
+{
+    int m = clz64(x), l = ctz64(x);
+
+    if (m + l == 63) /* there is just one "one" */
+        return l;
+
+    return (63 - m) + 1;
+}
+
 /* Host type specific sizes of these routines.  */
 
 #if ULONG_MAX == UINT32_MAX
