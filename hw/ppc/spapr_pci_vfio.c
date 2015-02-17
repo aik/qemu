@@ -46,6 +46,9 @@ static int spapr_phb_vfio_levels(uint32_t entries)
     return levels;
 }
 
+//extern void aikdbg(void *container, void *vaddr, ram_addr_t size);
+extern void aikdbg(MemoryListener *ml);
+
 static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
                            uint32_t page_shift, uint32_t window_shift_hint,
                            Error **errp)
@@ -117,6 +120,11 @@ static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
     //    kvmppc_remove_spapr_tce(tcet->table, tcet->fd,
       //                          tcet->nb_table);
     }
+
+#if 1
+    if (SPAPR_PCI_DMA_WINDOW_NUM(liobn))
+    aikdbg(NULL);//NULL, NULL, 0);
+#endif
 }
 
 static int spapr_pci_vfio_ddw_query(sPAPRPHBState *sphb,
