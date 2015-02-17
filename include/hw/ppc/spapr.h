@@ -383,8 +383,12 @@ int spapr_allocate_irq_block(int num, bool lsi, bool msi);
 #define RTAS_GET_SENSOR_STATE                   (RTAS_TOKEN_BASE + 0x1D)
 #define RTAS_IBM_CONFIGURE_CONNECTOR            (RTAS_TOKEN_BASE + 0x1E)
 #define RTAS_IBM_OS_TERM                        (RTAS_TOKEN_BASE + 0x1F)
+#define RTAS_IBM_QUERY_PE_DMA_WINDOW            (RTAS_TOKEN_BASE + 0x20)
+#define RTAS_IBM_CREATE_PE_DMA_WINDOW           (RTAS_TOKEN_BASE + 0x21)
+#define RTAS_IBM_REMOVE_PE_DMA_WINDOW           (RTAS_TOKEN_BASE + 0x22)
+#define RTAS_IBM_RESET_PE_DMA_WINDOW            (RTAS_TOKEN_BASE + 0x23)
 
-#define RTAS_TOKEN_MAX                          (RTAS_TOKEN_BASE + 0x20)
+#define RTAS_TOKEN_MAX                          (RTAS_TOKEN_BASE + 0x24)
 
 /* RTAS ibm,get-system-parameter token values */
 #define RTAS_SYSPARM_SPLPAR_CHARACTERISTICS      20
@@ -465,6 +469,7 @@ struct sPAPRTCETable {
     uint64_t bus_offset;
     uint32_t page_shift;
     uint64_t *table;
+    uint64_t *migtable;
     bool bypass;
     bool vfio_accel;
     int fd;

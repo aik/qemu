@@ -478,6 +478,11 @@ static int spapr_phb_disable_dma_windows(Object *child, void *opaque)
         object_dynamic_cast(child, TYPE_SPAPR_TCE_TABLE);
 
     if (tcet) {
+        sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(opaque);
+        sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(opaque);
+        if (spc->ddw_remove) {
+            spc->ddw_remove(sphb, tcet);
+        }
         spapr_tce_table_disable(tcet);
     }
 
@@ -490,8 +495,25 @@ int spapr_phb_dma_reset(sPAPRPHBState *sphb)
     sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
     Error *err = NULL;
 
-    object_child_foreach(OBJECT(sphb), spapr_phb_disable_dma_windows, NULL);
+    object_child_foreach(OBJECT(sphb), spapr_phb_disable_dma_windows, sphb);
     spc->init_dma_window(sphb, liobn, SPAPR_TCE_PAGE_SHIFT, 0, &err);
+
+    return 0;
+}
+
+/*
+ * Dynamic DMA windows
+ */
+static int spapr_pci_ddw_query(sPAPRPHBState *sphb,
+                               uint32_t *windows_supported,
+                               uint32_t *page_size_mask,
+                               uint32_t *dma32_window_size,
+                               uint64_t *dma64_window_size)
+{
+    *windows_supported = SPAPR_PCI_DMA_MAX_WINDOWS;
+    *page_size_mask = DDW_PGSIZE_64K | DDW_PGSIZE_16M;
+    *dma32_window_size = SPAPR_PCI_DMA32_SIZE;
+    *dma64_window_size = 1ULL << up_pow_of_two(ram_size);
 
     return 0;
 }
@@ -655,10 +677,12 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         sphb->lsi_table[i].irq = irq;
     }
 
-    /* Create default DMA window */
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
-    memory_region_add_subregion_overlap(&sphb->iommu_root, 0,
-                                        spapr_tce_get_iommu(tcet), 0);
+    for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+        tcet = spapr_tce_new_table(DEVICE(sphb),
+                                   SPAPR_PCI_LIOBN(sphb->index, i));
+        memory_region_add_subregion_overlap(&sphb->iommu_root, 0,
+                                            spapr_tce_get_iommu(tcet), 0);
+    }
 
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 }
@@ -671,8 +695,13 @@ static void spapr_phb_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
     uint32_t nb_table;
     uint64_t bus_offset = 0;
 
-    tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
-    nb_table = SPAPR_PCI_DMA32_SIZE >> SPAPR_TCE_PAGE_SHIFT;
+    tcet = spapr_tce_find_by_liobn(liobn);
+
+    if (!window_shift_hint && !SPAPR_PCI_DMA_WINDOW_NUM(liobn)) {
+        window_shift_hint = up_pow_of_two(SPAPR_PCI_DMA32_SIZE);
+    }
+
+    nb_table = (1ULL << window_shift_hint) >> page_shift;
     spapr_tce_set_props(tcet, bus_offset, page_shift, nb_table, false);
     spapr_tce_table_enable(tcet);
 }
@@ -828,6 +857,7 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->cannot_instantiate_with_device_add_yet = false;
     spc->init_dma_window = spapr_phb_init_dma_window;
+    spc->ddw_query = spapr_pci_ddw_query;
 }
 
 static const TypeInfo spapr_phb_info = {

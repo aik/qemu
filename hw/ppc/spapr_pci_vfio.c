@@ -24,18 +24,43 @@
 
 static Property spapr_phb_vfio_properties[] = {
     DEFINE_PROP_INT32("iommu", sPAPRPHBVFIOState, iommugroupid, -1),
+    DEFINE_PROP_UINT8("levels", sPAPRPHBVFIOState, levels, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
+
+static int spapr_phb_vfio_levels(uint32_t entries)
+{
+    unsigned pages = (entries * sizeof(uint64_t)) / getpagesize();
+    int levels;
+
+    if (pages < 8) {
+        levels = 1;
+    } else if (pages < 64) {
+        levels = 2;
+    } else if (pages < 4096) {
+        levels = 3;
+    } else {
+        levels = 4;
+    }
+
+    return levels;
+}
 
 static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
                            uint32_t page_shift, uint32_t window_shift_hint,
                            Error **errp)
 {
     sPAPRPHBVFIOState *svphb = SPAPR_PCI_VFIO_HOST_BRIDGE(sphb);
-    struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
     int ret;
     uint32_t nb_table;
     sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
+    struct vfio_iommu_spapr_tce_create create = {
+        .argsz = sizeof(create),
+        .page_shift = page_shift,
+        .window_shift = window_shift_hint,
+        .levels = svphb->levels,
+        .start_addr = 0,
+    };
 
     ret = vfio_container_ioctl(&svphb->phb.iommu_as,
                                VFIO_CHECK_EXTENSION,
@@ -46,19 +71,72 @@ static void spapr_phb_vfio_init_dma_window(sPAPRPHBState *sphb, uint32_t liobn,
         return;
     }
 
+    if (!window_shift_hint && !SPAPR_PCI_DMA_WINDOW_NUM(liobn)) {
+        struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
+        ret = vfio_container_ioctl(&sphb->iommu_as,
+                                   VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
+        if (ret) {
+            error_setg_errno(errp, -ret,
+                             "spapr-vfio: get info from container failed");
+            return;
+        }
+
+        create.window_shift = up_pow_of_two(info.dma32_window_size);
+    }
+
+    if (!create.levels) {
+        create.levels = spapr_phb_vfio_levels(1ULL <<
+                                              (window_shift_hint - page_shift));
+    }
+
     ret = vfio_container_ioctl(&sphb->iommu_as,
-                               VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
+                               VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
     if (ret) {
         error_setg_errno(errp, -ret,
-                         "spapr-vfio: get info from container failed");
+                         "spapr-vfio: create window failed");
         return;
     }
 
-    tcet = spapr_tce_find_by_liobn(liobn);
-    nb_table = info.dma32_window_size >> SPAPR_TCE_PAGE_SHIFT;
-    spapr_tce_set_props(tcet, info.dma32_window_start, page_shift,
-                        nb_table, true);
+    nb_table = 1ULL << (create.window_shift - page_shift);
+    spapr_tce_set_props(tcet, create.start_addr, page_shift, nb_table, true);
     spapr_tce_table_enable(tcet);
+}
+
+static int spapr_pci_vfio_ddw_query(sPAPRPHBState *sphb,
+                                    uint32_t *windows_supported,
+                                    uint32_t *page_size_mask,
+                                    uint32_t *dma32_window_size,
+                                    uint64_t *dma64_window_size)
+{
+    struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
+    int ret;
+
+    ret = vfio_container_ioctl(&sphb->iommu_as,
+                               VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
+    if (ret) {
+        return ret;
+    }
+
+    *windows_supported = info.windows_supported;
+    *page_size_mask = info.flags & DDW_PGSIZE_MASK;
+    *dma32_window_size = info.dma32_window_size;
+    *dma64_window_size = 1ULL << up_pow_of_two(ram_size);
+
+    return ret;
+}
+
+static int spapr_pci_vfio_ddw_remove(sPAPRPHBState *sphb, sPAPRTCETable *tcet)
+{
+    struct vfio_iommu_spapr_tce_remove remove = {
+        .argsz = sizeof(remove),
+        .start_addr = tcet->bus_offset
+    };
+    int ret;
+
+    ret = vfio_container_ioctl(&sphb->iommu_as,
+                               VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
+
+    return ret;
 }
 
 static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
@@ -68,6 +146,8 @@ static void spapr_phb_vfio_class_init(ObjectClass *klass, void *data)
 
     dc->props = spapr_phb_vfio_properties;
     spc->init_dma_window = spapr_phb_vfio_init_dma_window;
+    spc->ddw_query = spapr_pci_vfio_ddw_query;
+    spc->ddw_remove = spapr_pci_vfio_ddw_remove;
 }
 
 static const TypeInfo spapr_phb_vfio_info = {
