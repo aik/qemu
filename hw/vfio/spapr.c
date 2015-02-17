@@ -11,6 +11,25 @@
 #include "sysemu/kvm.h"
 #include "trace.h"
 
+static void vfio_ram_do_region(VFIOContainer *container,
+                              MemoryRegionSection *section, unsigned long req)
+{
+    int ret;
+    struct vfio_iommu_spapr_register_memory reg = { .argsz = sizeof(reg) };
+
+    if (!memory_region_is_ram(section->mr) ||
+        memory_region_is_skip_dump(section->mr)) {
+        return;
+    }
+
+    reg.vaddr = (__u64) memory_region_get_ram_ptr(section->mr) +
+        section->offset_within_region;
+    reg.size = ROUND_UP(int128_get64(section->size), TARGET_PAGE_SIZE);
+
+    ret = ioctl(container->fd, req, &reg);
+    trace_vfio_ram_register(_IOC_NR(req) - VFIO_BASE, reg.vaddr, reg.size, ret);
+}
+
 static void vfio_iommu_map_notify(Notifier *n, void *data)
 {
     VFIOGuestIOMMU *giommu = container_of(n, VFIOGuestIOMMU, n);
@@ -102,6 +121,7 @@ static void vfio_listener_region_add(MemoryListener *listener,
     }
 
     memory_region_ref(section->mr);
+    vfio_ram_do_region(container, section, VFIO_IOMMU_SPAPR_REGISTER_MEMORY);
 
     trace_vfio_listener_region_add_iommu(iova,
          int128_get64(int128_sub(llend, int128_one())));
@@ -194,6 +214,8 @@ static void vfio_listener_region_del(MemoryListener *listener,
                      "0x%"HWADDR_PRIx") = %d (%m)",
                      container, iova, end - iova, ret);
     }
+
+    vfio_ram_do_region(container, section, VFIO_IOMMU_SPAPR_UNREGISTER_MEMORY);
 }
 
 static const MemoryListener vfio_memory_listener = {

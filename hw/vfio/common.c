@@ -587,18 +587,6 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        /*
-         * The host kernel code implementing VFIO_IOMMU_DISABLE is called
-         * when container fd is closed so we do not call it explicitly
-         * in this file.
-         */
-        ret = ioctl(fd, VFIO_IOMMU_ENABLE);
-        if (ret) {
-            error_report("vfio: failed to enable container: %m");
-            ret = -errno;
-            goto free_container_exit;
-        }
-
         spapr_memory_listener_register(container);
 
     } else {
