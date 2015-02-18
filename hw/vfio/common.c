@@ -190,8 +190,8 @@ const MemoryRegionOps vfio_region_ops = {
 /*
  * DMA - Mapping and unmapping for the "type1" IOMMU interface used on x86
  */
-static int vfio_dma_unmap(VFIOContainer *container,
-                          hwaddr iova, ram_addr_t size)
+int vfio_dma_unmap(VFIOContainer *container,
+                   hwaddr iova, ram_addr_t size)
 {
     struct vfio_iommu_type1_dma_unmap unmap = {
         .argsz = sizeof(unmap),
@@ -208,8 +208,8 @@ static int vfio_dma_unmap(VFIOContainer *container,
     return 0;
 }
 
-static int vfio_dma_map(VFIOContainer *container, hwaddr iova,
-                        ram_addr_t size, void *vaddr, bool readonly)
+int vfio_dma_map(VFIOContainer *container, hwaddr iova,
+                 ram_addr_t size, void *vaddr, bool readonly)
 {
     struct vfio_iommu_type1_dma_map map = {
         .argsz = sizeof(map),
@@ -238,7 +238,7 @@ static int vfio_dma_map(VFIOContainer *container, hwaddr iova,
     return -errno;
 }
 
-static bool vfio_listener_skipped_section(MemoryRegionSection *section)
+bool vfio_listener_skipped_section(MemoryRegionSection *section)
 {
     return (!memory_region_is_ram(section->mr) &&
             !memory_region_is_iommu(section->mr)) ||
@@ -249,64 +249,6 @@ static bool vfio_listener_skipped_section(MemoryRegionSection *section)
             * some IOMMU hardware.  TODO: VFIO should tell us the IOMMU width.
             */
            section->offset_within_address_space & (1ULL << 63);
-}
-
-static void vfio_iommu_map_notify(Notifier *n, void *data)
-{
-    VFIOGuestIOMMU *giommu = container_of(n, VFIOGuestIOMMU, n);
-    VFIOContainer *container = giommu->container;
-    IOMMUTLBEntry *iotlb = data;
-    MemoryRegion *mr;
-    hwaddr xlat;
-    hwaddr len = iotlb->addr_mask + 1;
-    void *vaddr;
-    int ret;
-
-    trace_vfio_iommu_map_notify(iotlb->iova,
-                                iotlb->iova + iotlb->addr_mask);
-
-    /*
-     * The IOMMU TLB entry we have just covers translation through
-     * this IOMMU to its immediate target.  We need to translate
-     * it the rest of the way through to memory.
-     */
-    mr = address_space_translate(&address_space_memory,
-                                 iotlb->translated_addr,
-                                 &xlat, &len, iotlb->perm & IOMMU_WO);
-    if (!memory_region_is_ram(mr)) {
-        error_report("iommu map to non memory area %"HWADDR_PRIx"\n",
-                     xlat);
-        return;
-    }
-    /*
-     * Translation truncates length to the IOMMU page size,
-     * check that it did not truncate too much.
-     */
-    if (len & iotlb->addr_mask) {
-        error_report("iommu has granularity incompatible with target AS\n");
-        return;
-    }
-
-    if ((iotlb->perm & IOMMU_RW) != IOMMU_NONE) {
-        vaddr = memory_region_get_ram_ptr(mr) + xlat;
-        ret = vfio_dma_map(container, iotlb->iova,
-                           iotlb->addr_mask + 1, vaddr,
-                           !(iotlb->perm & IOMMU_WO) || mr->readonly);
-        if (ret) {
-            error_report("vfio_dma_map(%p, 0x%"HWADDR_PRIx", "
-                         "0x%"HWADDR_PRIx", %p) = %d (%m)",
-                         container, iotlb->iova,
-                         iotlb->addr_mask + 1, vaddr, ret);
-        }
-    } else {
-        ret = vfio_dma_unmap(container, iotlb->iova, iotlb->addr_mask + 1);
-        if (ret) {
-            error_report("vfio_dma_unmap(%p, 0x%"HWADDR_PRIx", "
-                         "0x%"HWADDR_PRIx") = %d (%m)",
-                         container, iotlb->iova,
-                         iotlb->addr_mask + 1, ret);
-        }
-    }
 }
 
 static void vfio_listener_region_add(MemoryListener *listener,
@@ -343,45 +285,6 @@ static void vfio_listener_region_add(MemoryListener *listener,
     }
 
     memory_region_ref(section->mr);
-
-    if (memory_region_is_iommu(section->mr)) {
-        VFIOGuestIOMMU *giommu;
-
-        trace_vfio_listener_region_add_iommu(iova,
-                    int128_get64(int128_sub(llend, int128_one())));
-        /*
-         * FIXME: We should do some checking to see if the
-         * capabilities of the host VFIO IOMMU are adequate to model
-         * the guest IOMMU
-         *
-         * FIXME: For VFIO iommu types which have KVM acceleration to
-         * avoid bouncing all map/unmaps through qemu this way, this
-         * would be the right place to wire that up (tell the KVM
-         * device emulation the VFIO iommu handles to use).
-         */
-        /*
-         * This assumes that the guest IOMMU is empty of
-         * mappings at this point.
-         *
-         * One way of doing this is:
-         * 1. Avoid sharing IOMMUs between emulated devices or different
-         * IOMMU groups.
-         * 2. Implement VFIO_IOMMU_ENABLE in the host kernel to fail if
-         * there are some mappings in IOMMU.
-         *
-         * VFIO on SPAPR does that. Other IOMMU models may do that different,
-         * they must make sure there are no existing mappings or
-         * loop through existing mappings to map them into VFIO.
-         */
-        giommu = g_malloc0(sizeof(*giommu));
-        giommu->iommu = section->mr;
-        giommu->container = container;
-        giommu->n.notify = vfio_iommu_map_notify;
-        QLIST_INSERT_HEAD(&container->giommu_list, giommu, giommu_next);
-        memory_region_register_iommu_notifier(giommu->iommu, &giommu->n);
-
-        return;
-    }
 
     /* Here we assume that memory_region_is_ram(section->mr)==true */
 
@@ -433,27 +336,6 @@ static void vfio_listener_region_del(MemoryListener *listener,
                  (section->offset_within_region & ~TARGET_PAGE_MASK))) {
         error_report("%s received unaligned region", __func__);
         return;
-    }
-
-    if (memory_region_is_iommu(section->mr)) {
-        VFIOGuestIOMMU *giommu;
-
-        QLIST_FOREACH(giommu, &container->giommu_list, giommu_next) {
-            if (giommu->iommu == section->mr) {
-                memory_region_unregister_iommu_notifier(&giommu->n);
-                QLIST_REMOVE(giommu, giommu_next);
-                g_free(giommu);
-                break;
-            }
-        }
-
-        /*
-         * FIXME: We assume the one big unmap below is adequate to
-         * remove any individual page mappings in the IOMMU which
-         * might have been copied into VFIO. This works for a page table
-         * based IOMMU where a big unmap flattens a large range of IO-PTEs.
-         * That may not be true for all IOMMU types.
-         */
     }
 
     iova = TARGET_PAGE_ALIGN(section->offset_within_address_space);
@@ -717,11 +599,7 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        container->iommu_data.type1.listener = vfio_memory_listener;
-        container->iommu_data.release = vfio_listener_release;
-
-        memory_listener_register(&container->iommu_data.type1.listener,
-                                 container->space->as);
+        spapr_memory_listener_register(container);
 
     } else {
         error_report("vfio: No available IOMMU models");
