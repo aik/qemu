@@ -2000,6 +2000,10 @@ static void ppc_spapr_init(MachineState *machine)
     qemu_register_reset(spapr_ccs_reset_hook, spapr);
 
     qemu_register_boot_set(spapr_boot_set, spapr);
+
+    if (kvm_enabled() && kvmppc_spapr_use_multitce()) {
+        kvmppc_spapr_enable_inkernel_multitce();
+    }
 }
 
 static int spapr_kvm_type(const char *vm_type)
