@@ -851,9 +851,6 @@ static int spapr_phb_dma_reset(sPAPRPHBState *sphb)
     if (!tcet->enabled) {
         spapr_phb_dma_init_window(sphb, sphb->dma_liobn, SPAPR_TCE_PAGE_SHIFT,
                                   sphb->dma32_window_size);
-
-        memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
-                                    spapr_tce_get_iommu(tcet));
     }
 
     return 0;
@@ -1430,6 +1427,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         error_report("No default TCE table for %s", sphb->dtbusname);
         return;
     }
+    memory_region_add_subregion(&sphb->iommu_root, 0, spapr_tce_get_iommu(tcet));
 
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 }
