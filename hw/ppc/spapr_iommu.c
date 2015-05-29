@@ -78,15 +78,16 @@ static IOMMUAccessFlags spapr_tce_iommu_access_flags(uint64_t tce)
 
 static uint64_t *spapr_tce_alloc_table(uint32_t liobn,
                                        uint32_t page_shift,
+                                       uint64_t bus_offset,
                                        uint32_t nb_table,
                                        int *fd,
                                        bool need_vfio)
 {
     uint64_t *table = NULL;
-    uint64_t window_size = (uint64_t)nb_table << page_shift;
 
-    if (kvm_enabled() && !(window_size >> 32)) {
-        table = kvmppc_create_spapr_tce(liobn, window_size, fd, need_vfio);
+    if (kvm_enabled()) {
+        table = kvmppc_create_spapr_tce(liobn, page_shift, bus_offset, nb_table,
+                                        fd, need_vfio);
     }
 
     if (!table) {
@@ -302,6 +303,7 @@ void spapr_tce_set_need_vfio(sPAPRTCETable *tcet, bool need_vfio)
 
     tcet->table = spapr_tce_alloc_table(tcet->liobn,
                                         tcet->page_shift,
+                                        tcet->bus_offset,
                                         tcet->nb_table,
                                         &newfd,
                                         need_vfio);
@@ -342,6 +344,7 @@ static void spapr_tce_table_do_enable(sPAPRTCETable *tcet)
 
     tcet->table = spapr_tce_alloc_table(tcet->liobn,
                                         tcet->page_shift,
+                                        tcet->bus_offset,
                                         tcet->nb_table,
                                         &tcet->fd,
                                         tcet->vfio_users != 0);
