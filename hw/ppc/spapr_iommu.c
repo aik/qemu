@@ -76,16 +76,17 @@ static IOMMUAccessFlags spapr_tce_iommu_access_flags(uint64_t tce)
 
 static uint64_t *spapr_tce_alloc_table(uint32_t liobn,
                                        uint32_t nb_table,
+                                       uint64_t bus_offset,
                                        uint32_t page_shift,
                                        int *fd,
                                        bool vfio_accel,
                                        bool force_userspace)
 {
     uint64_t *table = NULL;
-    uint64_t window_size = (uint64_t)nb_table << page_shift;
 
-    if (kvm_enabled() && !force_userspace && !(window_size >> 32)) {
-        table = kvmppc_create_spapr_tce(liobn, window_size, fd, vfio_accel);
+    if (kvm_enabled() && !force_userspace) {
+        table = kvmppc_create_spapr_tce(liobn, nb_table, bus_offset,
+                                        page_shift, fd, vfio_accel);
     }
 
     if (!table) {
@@ -255,6 +256,7 @@ static void spapr_tce_table_do_enable(sPAPRTCETable *tcet, bool vfio_accel)
 
     tcet->table = spapr_tce_alloc_table(tcet->liobn,
                                         tcet->nb_table,
+                                        tcet->bus_offset,
                                         tcet->page_shift,
                                         &tcet->fd,
                                         vfio_accel,
@@ -575,6 +577,7 @@ int spapr_tce_realloc(sPAPRTCETable *tcet, bool vfio_accel,
 
     tcet->table = spapr_tce_alloc_table(tcet->liobn,
                                         tcet->nb_table,
+                                        tcet->bus_offset,
                                         tcet->page_shift,
                                         &tcet->fd,
                                         vfio_accel,
