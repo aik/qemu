@@ -215,7 +215,7 @@ sPAPRTCETable *spapr_tce_new_table(DeviceState *owner, uint32_t liobn)
     return tcet;
 }
 
-static void spapr_tce_table_do_enable(sPAPRTCETable *tcet)
+static void spapr_tce_table_do_enable(sPAPRTCETable *tcet, bool vfio_accel)
 {
     if (!tcet->nb_table) {
         return;
@@ -225,7 +225,7 @@ static void spapr_tce_table_do_enable(sPAPRTCETable *tcet)
                                         tcet->nb_table,
                                         tcet->page_shift,
                                         &tcet->fd,
-                                        tcet->vfio_accel);
+                                        vfio_accel);
 
     memory_region_set_size(&tcet->iommu,
                            (uint64_t)tcet->nb_table << tcet->page_shift);
@@ -244,9 +244,8 @@ void spapr_tce_table_enable(sPAPRTCETable *tcet,
     tcet->bus_offset = bus_offset;
     tcet->page_shift = page_shift;
     tcet->nb_table = nb_table;
-    tcet->vfio_accel = vfio_accel;
 
-    spapr_tce_table_do_enable(tcet);
+    spapr_tce_table_do_enable(tcet, vfio_accel);
 }
 
 void spapr_tce_table_disable(sPAPRTCETable *tcet)
@@ -264,7 +263,6 @@ void spapr_tce_table_disable(sPAPRTCETable *tcet)
     tcet->bus_offset = 0;
     tcet->page_shift = 0;
     tcet->nb_table = 0;
-    tcet->vfio_accel = false;
 }
 
 static void spapr_tce_table_unrealize(DeviceState *dev, Error **errp)

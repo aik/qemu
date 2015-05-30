@@ -563,7 +563,6 @@ struct sPAPRTCETable {
     uint32_t page_shift;
     uint64_t *table;
     bool bypass;
-    bool vfio_accel;
     int fd;
     MemoryRegion iommu;
     struct VIOsPAPRDevice *vdev; /* for @bypass migration compatibility only */
