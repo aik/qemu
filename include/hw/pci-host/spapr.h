@@ -110,6 +110,8 @@ struct sPAPRPHBState {
 
 #define SPAPR_PCI_DMA32_SIZE         0x40000000
 
+#define SPAPR_PCI_DMA_MAX_WINDOWS    1
+
 static inline qemu_irq spapr_phb_lsi_qirq(struct sPAPRPHBState *phb, int pin)
 {
     sPAPRMachineState *spapr = SPAPR_MACHINE(qdev_get_machine());
@@ -130,6 +132,9 @@ void spapr_pci_rtas_init(void);
 sPAPRPHBState *spapr_pci_find_phb(sPAPRMachineState *spapr, uint64_t buid);
 PCIDevice *spapr_pci_find_dev(sPAPRMachineState *spapr, uint64_t buid,
                               uint32_t config_addr);
+int spapr_phb_dma_remove_window(sPAPRPHBState *sphb,
+                                sPAPRTCETable *tcet);
+int spapr_phb_dma_reset(sPAPRPHBState *sphb);
 
 int spapr_phb_vfio_dma_capabilities_update(sPAPRPHBState *sphb);
 int spapr_phb_vfio_eeh_set_option(sPAPRPHBState *sphb,

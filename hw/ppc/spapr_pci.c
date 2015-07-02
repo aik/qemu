@@ -838,20 +838,34 @@ static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
     return 0;
 }
 
-static int spapr_phb_dma_reset(sPAPRPHBState *sphb)
+int spapr_phb_dma_remove_window(sPAPRPHBState *sphb,
+                                sPAPRTCETable *tcet)
 {
+    spapr_tce_table_disable(tcet);
+
+    return 0;
+}
+
+int spapr_phb_dma_reset(sPAPRPHBState *sphb)
+{
+    int i;
     sPAPRTCETable *tcet;
 
     if (spapr_phb_dma_capabilities_update(sphb)) {
         return -1;
     }
 
+    for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+        tcet = spapr_tce_find_by_liobn(SPAPR_PCI_LIOBN(sphb->index, i));
+        if (tcet) {
+            spapr_phb_dma_remove_window(sphb, tcet);
+        }
+    }
+
     /* Register default 32bit DMA window */
     tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
-    if (!tcet->enabled) {
-        spapr_phb_dma_init_window(sphb, sphb->dma_liobn, SPAPR_TCE_PAGE_SHIFT,
-                                  sphb->dma32_window_size);
-    }
+    spapr_phb_dma_init_window(sphb, sphb->dma_liobn, SPAPR_TCE_PAGE_SHIFT,
+                              sphb->dma32_window_size);
 
     return 0;
 }
