@@ -824,7 +824,7 @@ static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
                                      uint32_t liobn, uint32_t page_shift,
                                      uint64_t window_size)
 {
-    sPAPRTCETable *tcet;
+    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
     uint64_t bus_offset = sphb->dma32_window_start;
     uint32_t nb_table = window_size >> page_shift;
 
@@ -832,10 +832,10 @@ static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
         return -1;
     }
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), liobn, bus_offset,
-                               page_shift, nb_table, sphb->vfio_num > 0);
+    spapr_tce_table_enable(tcet, bus_offset, page_shift, nb_table,
+                           sphb->vfio_num > 0);
 
-    return tcet ? 0 : -1;
+    return 0;
 }
 
 static int spapr_phb_dma_reset(sPAPRPHBState *sphb)
@@ -848,15 +848,9 @@ static int spapr_phb_dma_reset(sPAPRPHBState *sphb)
 
     /* Register default 32bit DMA window */
     tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
-    if (!tcet) {
+    if (!tcet->enabled) {
         spapr_phb_dma_init_window(sphb, sphb->dma_liobn, SPAPR_TCE_PAGE_SHIFT,
                                   sphb->dma32_window_size);
-
-        tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
-        if (!tcet) {
-            error_report("No default TCE table for %s", sphb->dtbusname);
-            return -1;
-        }
 
         memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
                                     spapr_tce_get_iommu(tcet));
@@ -1276,6 +1270,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     int i;
     PCIBus *bus;
     uint64_t msi_window_size = 4096;
+    sPAPRTCETable *tcet;
 
     if ((sphb->iommugroupid != -1) &&
         object_dynamic_cast(OBJECT(sphb), TYPE_SPAPR_PCI_VFIO_HOST_BRIDGE)) {
@@ -1428,6 +1423,12 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
                                    SPAPR_DR_CONNECTOR_TYPE_PCI,
                                    (sphb->index << 16) | i);
         }
+    }
+
+    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
+    if (!tcet) {
+        error_report("No default TCE table for %s", sphb->dtbusname);
+        return;
     }
 
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
