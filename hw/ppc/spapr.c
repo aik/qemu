@@ -1632,8 +1632,8 @@ static void spapr_validate_node_memory(MachineState *machine)
     for (i = 0; i < nb_numa_nodes; i++) {
         if (numa_info[i].node_mem &&
             numa_info[i].node_mem % SPAPR_MEMORY_BLOCK_SIZE) {
-            error_report("Can't support memory configuration where memory "
-                         "size %lx of node %d isn't aligned to %lld MB",
+            error_report("Can't support memory configuration where memory size"
+                         " 0x%" PRIx64 " of node %d isn't aligned to %lld MB",
                          numa_info[i].node_mem, i,
                          SPAPR_MEMORY_BLOCK_SIZE/M_BYTE);
             exit(EXIT_FAILURE);
