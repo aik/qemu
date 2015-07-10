@@ -321,6 +321,9 @@ static void vfio_listener_region_add(MemoryListener *listener,
     Int128 llend;
     void *vaddr;
     int ret;
+    const bool is_iommu = memory_region_is_iommu(section->mr);
+    const hwaddr page_mask =
+        is_iommu ? TARGET_PAGE_MASK : qemu_real_host_page_mask;
 
     if (vfio_listener_skipped_section(section)) {
         trace_vfio_listener_region_add_skip(
@@ -330,16 +333,16 @@ static void vfio_listener_region_add(MemoryListener *listener,
         return;
     }
 
-    if (unlikely((section->offset_within_address_space & ~TARGET_PAGE_MASK) !=
-                 (section->offset_within_region & ~TARGET_PAGE_MASK))) {
+    if (unlikely((section->offset_within_address_space & ~page_mask) !=
+                 (section->offset_within_region & ~page_mask))) {
         error_report("%s received unaligned region", __func__);
         return;
     }
 
-    iova = TARGET_PAGE_ALIGN(section->offset_within_address_space);
+    iova = ROUND_UP(section->offset_within_address_space, ~page_mask + 1);
     llend = int128_make64(section->offset_within_address_space);
     llend = int128_add(llend, section->size);
-    llend = int128_and(llend, int128_exts64(TARGET_PAGE_MASK));
+    llend = int128_and(llend, int128_exts64(page_mask));
 
     if (int128_ge(int128_make64(iova), llend)) {
         return;
@@ -347,7 +350,7 @@ static void vfio_listener_region_add(MemoryListener *listener,
 
     memory_region_ref(section->mr);
 
-    if (memory_region_is_iommu(section->mr)) {
+    if (is_iommu) {
         VFIOGuestIOMMU *giommu;
 
         trace_vfio_listener_region_add_iommu(iova,
@@ -423,6 +426,9 @@ static void vfio_listener_region_del(MemoryListener *listener,
                                             iommu_data.type1.listener);
     hwaddr iova, end;
     int ret;
+    const bool is_iommu = memory_region_is_iommu(section->mr);
+    const hwaddr page_mask =
+        is_iommu ? TARGET_PAGE_MASK : qemu_real_host_page_mask;
 
     if (vfio_listener_skipped_section(section)) {
         trace_vfio_listener_region_del_skip(
@@ -432,13 +438,13 @@ static void vfio_listener_region_del(MemoryListener *listener,
         return;
     }
 
-    if (unlikely((section->offset_within_address_space & ~TARGET_PAGE_MASK) !=
-                 (section->offset_within_region & ~TARGET_PAGE_MASK))) {
+    if (unlikely((section->offset_within_address_space & ~page_mask) !=
+                 (section->offset_within_region & ~page_mask))) {
         error_report("%s received unaligned region", __func__);
         return;
     }
 
-    if (memory_region_is_iommu(section->mr)) {
+    if (is_iommu) {
         VFIOGuestIOMMU *giommu;
 
         QLIST_FOREACH(giommu, &container->giommu_list, giommu_next) {
@@ -459,9 +465,9 @@ static void vfio_listener_region_del(MemoryListener *listener,
          */
     }
 
-    iova = TARGET_PAGE_ALIGN(section->offset_within_address_space);
+    iova = REAL_HOST_PAGE_ALIGN(section->offset_within_address_space);
     end = (section->offset_within_address_space + int128_get64(section->size)) &
-          TARGET_PAGE_MASK;
+          page_mask;
 
     if (iova >= end) {
         return;

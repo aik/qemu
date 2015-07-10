@@ -50,16 +50,16 @@ typedef struct VFIOQuirk {
     struct VFIOPCIDevice *vdev;
     QLIST_ENTRY(VFIOQuirk) next;
     struct {
-        uint32_t base_offset:TARGET_PAGE_BITS;
-        uint32_t address_offset:TARGET_PAGE_BITS;
+        uint32_t base_offset;
+        uint32_t address_offset;
         uint32_t address_size:3;
         uint32_t bar:3;
 
         uint32_t address_match;
         uint32_t address_mask;
 
-        uint32_t address_val:TARGET_PAGE_BITS;
-        uint32_t data_offset:TARGET_PAGE_BITS;
+        uint32_t address_val;
+        uint32_t data_offset;
         uint32_t data_size:3;
 
         uint8_t flags;
@@ -1319,8 +1319,8 @@ static uint64_t vfio_generic_quirk_read(void *opaque,
 {
     VFIOQuirk *quirk = opaque;
     VFIOPCIDevice *vdev = quirk->vdev;
-    hwaddr base = quirk->data.address_match & TARGET_PAGE_MASK;
-    hwaddr offset = quirk->data.address_match & ~TARGET_PAGE_MASK;
+    hwaddr base = quirk->data.address_match & qemu_real_host_page_mask;
+    hwaddr offset = quirk->data.address_match & ~qemu_real_host_page_mask;
     uint64_t data;
 
     if (vfio_flags_enabled(quirk->data.flags, quirk->data.read_flags) &&
@@ -1349,8 +1349,8 @@ static void vfio_generic_quirk_write(void *opaque, hwaddr addr,
 {
     VFIOQuirk *quirk = opaque;
     VFIOPCIDevice *vdev = quirk->vdev;
-    hwaddr base = quirk->data.address_match & TARGET_PAGE_MASK;
-    hwaddr offset = quirk->data.address_match & ~TARGET_PAGE_MASK;
+    hwaddr base = quirk->data.address_match & qemu_real_host_page_mask;
+    hwaddr offset = quirk->data.address_match & ~qemu_real_host_page_mask;
 
     if (vfio_flags_enabled(quirk->data.flags, quirk->data.write_flags) &&
         ranges_overlap(addr, size, offset, quirk->data.address_mask + 1)) {
@@ -1650,9 +1650,9 @@ static void vfio_probe_ati_bar2_4000_quirk(VFIOPCIDevice *vdev, int nr)
 
     memory_region_init_io(&quirk->mem, OBJECT(vdev), &vfio_generic_quirk, quirk,
                           "vfio-ati-bar2-4000-quirk",
-                          TARGET_PAGE_ALIGN(quirk->data.address_mask + 1));
+                          REAL_HOST_PAGE_ALIGN(quirk->data.address_mask + 1));
     memory_region_add_subregion_overlap(&vdev->bars[nr].region.mem,
-                          quirk->data.address_match & TARGET_PAGE_MASK,
+                          quirk->data.address_match & qemu_real_host_page_mask,
                           &quirk->mem, 1);
 
     QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, quirk, next);
@@ -1888,7 +1888,7 @@ static void vfio_nvidia_88000_quirk_write(void *opaque, hwaddr addr,
     VFIOQuirk *quirk = opaque;
     VFIOPCIDevice *vdev = quirk->vdev;
     PCIDevice *pdev = &vdev->pdev;
-    hwaddr base = quirk->data.address_match & TARGET_PAGE_MASK;
+    hwaddr base = quirk->data.address_match & qemu_real_host_page_mask;
 
     vfio_generic_quirk_write(opaque, addr, data, size);
 
@@ -1943,9 +1943,9 @@ static void vfio_probe_nvidia_bar0_88000_quirk(VFIOPCIDevice *vdev, int nr)
 
     memory_region_init_io(&quirk->mem, OBJECT(vdev), &vfio_nvidia_88000_quirk,
                           quirk, "vfio-nvidia-bar0-88000-quirk",
-                          TARGET_PAGE_ALIGN(quirk->data.address_mask + 1));
+                          REAL_HOST_PAGE_ALIGN(quirk->data.address_mask + 1));
     memory_region_add_subregion_overlap(&vdev->bars[nr].region.mem,
-                          quirk->data.address_match & TARGET_PAGE_MASK,
+                          quirk->data.address_match & qemu_real_host_page_mask,
                           &quirk->mem, 1);
 
     QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, quirk, next);
@@ -1980,9 +1980,9 @@ static void vfio_probe_nvidia_bar0_1800_quirk(VFIOPCIDevice *vdev, int nr)
 
     memory_region_init_io(&quirk->mem, OBJECT(vdev), &vfio_generic_quirk, quirk,
                           "vfio-nvidia-bar0-1800-quirk",
-                          TARGET_PAGE_ALIGN(quirk->data.address_mask + 1));
+                          REAL_HOST_PAGE_ALIGN(quirk->data.address_mask + 1));
     memory_region_add_subregion_overlap(&vdev->bars[nr].region.mem,
-                          quirk->data.address_match & TARGET_PAGE_MASK,
+                          quirk->data.address_match & qemu_real_host_page_mask,
                           &quirk->mem, 1);
 
     QLIST_INSERT_HEAD(&vdev->bars[nr].quirks, quirk, next);
