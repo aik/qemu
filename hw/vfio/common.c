@@ -683,8 +683,8 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        ret = ioctl(fd, VFIO_SET_IOMMU,
-                    v2 ? VFIO_TYPE1v2_IOMMU : VFIO_TYPE1_IOMMU);
+        container->iommu_data.type = v2 ? VFIO_TYPE1v2_IOMMU : VFIO_TYPE1_IOMMU;
+        ret = ioctl(fd, VFIO_SET_IOMMU, container->iommu_data.type);
         if (ret) {
             error_report("vfio: failed to set iommu for container: %m");
             ret = -errno;
@@ -712,7 +712,8 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             ret = -errno;
             goto free_container_exit;
         }
-        ret = ioctl(fd, VFIO_SET_IOMMU, VFIO_SPAPR_TCE_IOMMU);
+        container->iommu_data.type = VFIO_SPAPR_TCE_IOMMU;
+        ret = ioctl(fd, VFIO_SET_IOMMU, container->iommu_data.type);
         if (ret) {
             error_report("vfio: failed to set iommu for container: %m");
             ret = -errno;
@@ -731,10 +732,10 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        container->iommu_data.type1.listener = vfio_memory_listener;
+        container->iommu_data.spapr.common.listener = vfio_memory_listener;
         container->iommu_data.release = vfio_listener_release;
 
-        memory_listener_register(&container->iommu_data.type1.listener,
+        memory_listener_register(&container->iommu_data.spapr.common.listener,
                                  container->space->as);
 
     } else {

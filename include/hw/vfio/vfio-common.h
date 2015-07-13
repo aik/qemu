@@ -70,13 +70,19 @@ typedef struct VFIOType1 {
     bool initialized;
 } VFIOType1;
 
+typedef struct VFIOSPAPR {
+    VFIOType1 common;
+} VFIOSPAPR;
+
 typedef struct VFIOContainer {
     VFIOAddressSpace *space;
     int fd; /* /dev/vfio/vfio, empowered by the attached groups */
     struct {
         /* enable abstraction to support various iommu backends */
+        unsigned type;
         union {
             VFIOType1 type1;
+            VFIOSPAPR spapr;
         };
         void (*release)(struct VFIOContainer *);
     } iommu_data;
