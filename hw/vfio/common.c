@@ -313,11 +313,10 @@ out:
     rcu_read_unlock();
 }
 
-static void vfio_listener_region_add(MemoryListener *listener,
-                                     MemoryRegionSection *section)
+static void vfio_listener_region_do_add(VFIOContainer *container,
+                                        MemoryListener *listener,
+                                        MemoryRegionSection *section)
 {
-    VFIOContainer *container = container_of(listener, VFIOContainer,
-                                            iommu_data.type1.listener);
     hwaddr iova, end;
     Int128 llend;
     void *vaddr;
@@ -397,34 +396,43 @@ static void vfio_listener_region_add(MemoryListener *listener,
             section->offset_within_region +
             (iova - section->offset_within_address_space);
 
-    trace_vfio_listener_region_add_ram(iova, end - 1, vaddr);
+    switch (container->iommu_data.type) {
+    case VFIO_TYPE1_IOMMU:
+    case VFIO_TYPE1v2_IOMMU:
+        trace_vfio_listener_region_add_ram(iova, end - 1, vaddr);
 
-    ret = vfio_dma_map(container, iova, end - iova, vaddr, section->readonly);
-    if (ret) {
-        error_report("vfio_dma_map(%p, 0x%"HWADDR_PRIx", "
-                     "0x%"HWADDR_PRIx", %p) = %d (%m)",
-                     container, iova, end - iova, vaddr, ret);
-
-        /*
-         * On the initfn path, store the first error in the container so we
-         * can gracefully fail.  Runtime, there's not much we can do other
-         * than throw a hardware error.
-         */
-        if (!container->iommu_data.type1.initialized) {
-            if (!container->iommu_data.type1.error) {
-                container->iommu_data.type1.error = ret;
-            }
-        } else {
-            hw_error("vfio: DMA mapping failed, unable to continue");
+        ret = vfio_dma_map(container, iova, end - iova, vaddr, section->readonly);
+        if (ret) {
+            error_report("vfio_dma_map(%p, 0x%"HWADDR_PRIx", "
+                         "0x%"HWADDR_PRIx", %p) = %d (%m)",
+                         container, iova, end - iova, vaddr, ret);
+            goto error_exit;
         }
+        break;
+    }
+
+    return;
+
+error_exit:
+
+    /*
+     * On the initfn path, store the first error in the container so we
+     * can gracefully fail.  Runtime, there's not much we can do other
+     * than throw a hardware error.
+     */
+    if (!container->iommu_data.type1.initialized) {
+        if (!container->iommu_data.type1.error) {
+            container->iommu_data.type1.error = ret;
+        }
+    } else {
+        hw_error("vfio: DMA mapping failed, unable to continue");
     }
 }
 
-static void vfio_listener_region_del(MemoryListener *listener,
-                                     MemoryRegionSection *section)
+static void vfio_listener_region_do_del(VFIOContainer *container,
+                                        MemoryListener *listener,
+                                        MemoryRegionSection *section)
 {
-    VFIOContainer *container = container_of(listener, VFIOContainer,
-                                            iommu_data.type1.listener);
     hwaddr iova, end;
     int ret;
     const bool is_iommu = memory_region_is_iommu(section->mr);
@@ -483,6 +491,25 @@ static void vfio_listener_region_del(MemoryListener *listener,
                      "0x%"HWADDR_PRIx") = %d (%m)",
                      container, iova, end - iova, ret);
     }
+}
+
+static void vfio_listener_region_add(MemoryListener *listener,
+                                     MemoryRegionSection *section)
+{
+    VFIOContainer *container = container_of(listener, VFIOContainer,
+                                            iommu_data.type1.listener);
+
+    vfio_listener_region_do_add(container, listener, section);
+}
+
+
+static void vfio_listener_region_del(MemoryListener *listener,
+                                     MemoryRegionSection *section)
+{
+    VFIOContainer *container = container_of(listener, VFIOContainer,
+                                            iommu_data.type1.listener);
+
+    vfio_listener_region_do_del(container, listener, section);
 }
 
 static const MemoryListener vfio_memory_listener = {
