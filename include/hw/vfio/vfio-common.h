@@ -72,6 +72,7 @@ typedef struct VFIOType1 {
 
 typedef struct VFIOSPAPR {
     VFIOType1 common;
+    MemoryListener ram_listener;
 } VFIOSPAPR;
 
 typedef struct VFIOContainer {
