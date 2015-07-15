@@ -161,6 +161,8 @@ static int spapr_tce_table_post_load(void *opaque, int version_id)
         spapr_vio_set_bypass(tcet->vdev, tcet->bypass);
     }
 
+    printf("+++Q+++ (%u) %s %u LIOBN=%x\n", getpid(), __func__, __LINE__, tcet->liobn);
+
     if (tcet->enabled) {
         if (!tcet->table) {
             tcet->enabled = false;
@@ -250,6 +252,10 @@ sPAPRTCETable *spapr_tce_new_table(DeviceState *owner, uint32_t liobn)
 
 static void spapr_tce_table_do_enable(sPAPRTCETable *tcet, bool vfio_accel)
 {
+
+    printf("+++Q+++ (%u) %s %u table=%p %x nb_table=%d\n", getpid(), __func__, __LINE__,
+            tcet, tcet->liobn, tcet->nb_table);
+
     if (!tcet->nb_table) {
         return;
     }
@@ -290,6 +296,7 @@ void spapr_tce_table_disable(sPAPRTCETable *tcet)
         return;
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     memory_region_del_subregion(&tcet->root, &tcet->iommu);
     memory_region_set_size(&tcet->iommu, 0);
 
@@ -562,6 +569,7 @@ int spapr_tce_realloc(sPAPRTCETable *tcet, bool vfio_accel,
     if (force_userspace) {
         oldtable = tcet->table;
         oldfd = tcet->fd;
+        printf("+++Q+++ (%u) %s %u: FU!\n", getpid(), __func__, __LINE__);
     } else {
         unsigned long cb = tcet->nb_table * sizeof(uint64_t);
         /*
@@ -573,6 +581,7 @@ int spapr_tce_realloc(sPAPRTCETable *tcet, bool vfio_accel,
         oldfd = -1;
         memcpy(oldtable, tcet->table, cb);
         spapr_tce_free_table(tcet->table, tcet->fd, tcet->nb_table);
+        printf("+++Q+++ (%u) %s %u: Destroyed table fd=%d\n", getpid(), __func__, __LINE__, tcet->fd);
     }
 
     tcet->table = spapr_tce_alloc_table(tcet->liobn,

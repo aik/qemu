@@ -202,6 +202,7 @@ static int vfio_dma_unmap(VFIOContainer *container,
 
     if (ioctl(container->fd, VFIO_IOMMU_UNMAP_DMA, &unmap)) {
         error_report("VFIO_UNMAP_DMA: %d", -errno);
+    exit(1);
         return -errno;
     }
 
@@ -235,6 +236,7 @@ static int vfio_dma_map(VFIOContainer *container, hwaddr iova,
     }
 
     error_report("VFIO_MAP_DMA: %d", -errno);
+    exit(1);
     return -errno;
 }
 
@@ -317,6 +319,8 @@ hwaddr vfio_iommu_page_mask(MemoryRegion *mr)
     if (memory_region_is_iommu(mr)) {
         int smallest = ffs(memory_region_iommu_get_page_sizes(mr)) - 1;
 
+        printf("+++Q+++ (%u) %s %u: %llx, %llx\n", getpid(), __func__, __LINE__,
+                ~((1ULL << smallest) - 1), 1ULL<<smallest);
         return ~((1ULL << smallest) - 1);
     }
     return qemu_real_host_page_mask;
@@ -340,6 +344,7 @@ static void vfio_listener_region_add(VFIOMemoryListener *vlistener,
         return;
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     if (unlikely((section->offset_within_address_space & ~page_mask) !=
                  (section->offset_within_region & ~page_mask))) {
         error_report("%s received unaligned region", __func__);
@@ -360,6 +365,7 @@ static void vfio_listener_region_add(VFIOMemoryListener *vlistener,
     if (memory_region_is_iommu(section->mr)) {
         VFIOGuestIOMMU *giommu;
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         trace_vfio_listener_region_add_iommu(iova,
                     int128_get64(int128_sub(llend, int128_one())));
         /*
@@ -762,12 +768,14 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
                 goto free_container_exit;
             }
         } else {
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             container->prereg_listener.container = container;
             container->prereg_listener.listener = vfio_prereg_listener;
 
             memory_listener_register(&container->prereg_listener.listener,
                                      &address_space_memory);
             if (container->error) {
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 error_report("vfio: RAM memory listener initialization failed for container");
                 memory_listener_unregister(
                     &container->prereg_listener.listener);
@@ -777,12 +785,14 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             container->initialized = true;
         }
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         container->iommu_listener.container = container;
         container->iommu_listener.listener = vfio_iommu_listener;
         container->release = vfio_listener_release;
 
         memory_listener_register(&container->iommu_listener.listener,
                                  container->space->as);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     } else {
         error_report("vfio: No available IOMMU models");
@@ -833,7 +843,9 @@ static void vfio_disconnect_container(VFIOGroup *group)
         }
         QLIST_REMOVE(container, next);
 
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         QLIST_FOREACH_SAFE(giommu, &container->giommu_list, giommu_next, tmp) {
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             memory_region_unregister_iommu_notifier(&giommu->n);
             QLIST_REMOVE(giommu, giommu_next);
             g_free(giommu);

@@ -820,8 +820,12 @@ static int spapr_phb_dma_capabilities_update(sPAPRPHBState *sphb)
         }
     }
 
+    printf("+++Q+++ (%u) %s %u: vfio_num=%d\n", getpid(), __func__, __LINE__,
+            sphb->vfio_num);
+
     return 0;
 }
+
 int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
                               uint32_t liobn, uint32_t page_shift,
                               uint64_t window_size)
@@ -836,6 +840,7 @@ int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
     }
 
     if (SPAPR_PCI_DMA_WINDOW_NUM(liobn) && !sphb->ddw_enabled) {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         return -1;
     }
 
@@ -843,6 +848,7 @@ int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
         if (sphb->vfio_num > 0) {
             ret = spapr_phb_vfio_dma_init_window(sphb, page_shift, window_size,
                                                  &bus_offset);
+            printf("+++Q+++ (%u) %s %u: ret=%d\n", getpid(), __func__, __LINE__, ret);
             if (ret) {
                 return ret;
             }
@@ -868,7 +874,7 @@ int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
         ret = spapr_tce_realloc(tcet, true, true);
         trace_spapr_pci_dma_realloc_update(tcet->liobn, ret);
     }
-
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     return 0;
 }
 
@@ -919,6 +925,8 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
 
     spapr_phb_dma_capabilities_update(sphb);
 
+    printf("+++Q+++ (%u) %s %u: vfio_num=%d\n", getpid(), __func__, __LINE__,
+            sphb->vfio_num);
     if (sphb->vfio_num > 0) {
         /*
          * First vfio-pci device besides in a container with a default 32bit
@@ -947,10 +955,12 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
                                                  tcet->page_shift,
                                                  &bus_offset);
             if (ret) {
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 break;
             }
             if (bus_offset != tcet->bus_offset) {
                 ret = -EFAULT;
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 break;
             }
             /*
@@ -960,8 +970,10 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
             ret = spapr_phb_vfio_dma_enable_accel(sphb, tcet->liobn,
                                                   tcet->bus_offset);
             if (ret) {
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 ret = spapr_tce_realloc(tcet, true, true);
             } else {
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
                 ret = spapr_tce_replay(tcet);
             }
             trace_spapr_pci_dma_realloc_update(tcet->liobn, ret);
@@ -1264,6 +1276,7 @@ static void spapr_phb_add_pci_device(sPAPRDRConnector *drc,
         if (object_dynamic_cast(OBJECT(pdev), "vfio-pci")) {
             unsigned vfio_num = phb->vfio_num;
 
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             ++phb->vfio_num;
             if (vfio_num == 0) {
                 if (spapr_phb_hotplug_dma_sync(phb)) {
@@ -1298,6 +1311,7 @@ static void spapr_phb_remove_pci_device_cb(DeviceState *dev, void *opaque)
      * an 'idle' state, as the device cleanup code expects.
      */
     pci_device_reset(PCI_DEVICE(dev));
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     /* Check if it the last vfio-pci device on a PHB while it is still alive */
     if (object_dynamic_cast(OBJECT(dev), "vfio-pci")) {

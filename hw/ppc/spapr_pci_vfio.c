@@ -76,6 +76,7 @@ static int spapr_phb_vfio_levels(uint32_t entries)
     return levels;
 }
 
+extern void aikdbg(MemoryListener *ml);
 int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
                                    uint32_t page_shift,
                                    uint64_t window_size,
