@@ -1398,6 +1398,15 @@ bool memory_region_is_iommu(MemoryRegion *mr)
     return mr->iommu_ops;
 }
 
+uint64_t memory_region_iommu_get_page_sizes(MemoryRegion *mr)
+{
+    assert(memory_region_is_iommu(mr));
+    if (mr->iommu_ops && mr->iommu_ops->get_page_sizes) {
+        return mr->iommu_ops->get_page_sizes(mr);
+    }
+    return qemu_real_host_page_size;
+}
+
 void memory_region_register_iommu_notifier(MemoryRegion *mr, Notifier *n)
 {
     notifier_list_add(&mr->iommu_notify, n);

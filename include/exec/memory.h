@@ -150,6 +150,8 @@ struct MemoryRegionOps {
 typedef struct MemoryRegionIOMMUOps MemoryRegionIOMMUOps;
 
 struct MemoryRegionIOMMUOps {
+    /* Returns supported page sizes */
+    uint64_t (*get_page_sizes)(MemoryRegion *iommu);
     /* Return a TLB entry that contains a given address. */
     IOMMUTLBEntry (*translate)(MemoryRegion *iommu, hwaddr addr, bool is_write);
 };
@@ -559,6 +561,15 @@ static inline bool memory_region_is_romd(MemoryRegion *mr)
  * @mr: the memory region being queried
  */
 bool memory_region_is_iommu(MemoryRegion *mr);
+
+/**
+ * memory_region_iommu_get_page_sizes: get supported page sizes in an iommu
+ *
+ * Returns %bitmap of supported page sizes for an iommu.
+ *
+ * @mr: the memory region being queried
+ */
+uint64_t memory_region_iommu_get_page_sizes(MemoryRegion *mr);
 
 /**
  * memory_region_notify_iommu: notify a change in an IOMMU translation entry.
