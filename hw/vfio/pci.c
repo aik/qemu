@@ -168,6 +168,7 @@ typedef struct VFIOPCIDevice {
     bool has_flr;
     bool has_pm_reset;
     bool rom_read_failed;
+    bool allow_quirks;
 } VFIOPCIDevice;
 
 typedef struct VFIORomBlacklistEntry {
@@ -2440,7 +2441,9 @@ static void vfio_map_bar(VFIOPCIDevice *vdev, int nr)
         }
     }
 
-    vfio_bar_quirk_setup(vdev, nr);
+    if (vdev->allow_quirks) {
+        vfio_bar_quirk_setup(vdev, nr);
+    }
 }
 
 static void vfio_map_bars(VFIOPCIDevice *vdev)
@@ -3750,6 +3753,7 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_BIT("x-req", VFIOPCIDevice, features,
                     VFIO_FEATURE_ENABLE_REQ_BIT, true),
     DEFINE_PROP_BOOL("x-mmap", VFIOPCIDevice, vbasedev.allow_mmap, true),
+    DEFINE_PROP_BOOL("quirks", VFIOPCIDevice, allow_quirks, true),
     /*
      * TODO - support passed fds... is this necessary?
      * DEFINE_PROP_STRING("vfiofd", VFIOPCIDevice, vfiofd_name),
