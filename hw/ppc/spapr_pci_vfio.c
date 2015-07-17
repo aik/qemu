@@ -115,6 +115,12 @@ int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
     return 0;
 }
 
+int spapr_phb_vfio_dma_enable_accel(sPAPRPHBState *sphb, uint64_t liobn,
+                                    uint64_t start_addr)
+{
+    return vfio_container_spapr_set_liobn(&sphb->iommu_as, liobn, start_addr);
+}
+
 int spapr_phb_vfio_dma_remove_window(sPAPRPHBState *sphb, uint64_t bus_offset)
 {
     struct vfio_iommu_spapr_tce_remove remove = {
@@ -328,6 +334,12 @@ int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
                                    uint32_t page_shift,
                                    uint64_t window_size,
                                    uint64_t *bus_offset)
+{
+    return -1;
+}
+
+int spapr_phb_vfio_dma_enable_accel(sPAPRPHBState *sphb, uint64_t liobn,
+                                    uint64_t start_addr)
 {
     return -1;
 }

@@ -859,6 +859,16 @@ int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
     spapr_tce_table_enable(tcet, bus_offset, page_shift, nb_table,
                            sphb->vfio_num > 0);
 
+    if ((tcet->fd < 0) || (sphb->vfio_num == 0)) {
+        return 0;
+    }
+
+    ret = spapr_phb_vfio_dma_enable_accel(sphb, tcet->liobn, tcet->bus_offset);
+    if (ret) {
+        ret = spapr_tce_realloc(tcet, true, true);
+        trace_spapr_pci_dma_realloc_update(tcet->liobn, ret);
+    }
+
     return 0;
 }
 
@@ -945,10 +955,15 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
             }
             /*
              * We got first vfio-pci device on accelerated table.
-             * VFIO acceleration is not possible.
-             * Reallocate table in userspace and replay mappings.
+             * Try binding iommu to liobn in KVM.
              */
-            ret = spapr_tce_realloc(tcet, true, true);
+            ret = spapr_phb_vfio_dma_enable_accel(sphb, tcet->liobn,
+                                                  tcet->bus_offset);
+            if (ret) {
+                ret = spapr_tce_realloc(tcet, true, true);
+            } else {
+                ret = spapr_tce_replay(tcet);
+            }
             trace_spapr_pci_dma_realloc_update(tcet->liobn, ret);
         } else if ((tcet->fd < 0) && (sphb->vfio_num > 0)) {
             /* There was no acceleration, so just replay mappings. */

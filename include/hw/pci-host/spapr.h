@@ -154,6 +154,8 @@ int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
                                    uint32_t page_shift,
                                    uint64_t window_size,
                                    uint64_t *bus_offset);
+int spapr_phb_vfio_dma_enable_accel(sPAPRPHBState *sphb, uint64_t liobn,
+                                    uint64_t start_addr);
 int spapr_phb_vfio_dma_remove_window(sPAPRPHBState *sphb,
                                      uint64_t bus_offset);
 int spapr_phb_vfio_eeh_set_option(sPAPRPHBState *sphb,
