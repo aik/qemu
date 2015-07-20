@@ -62,24 +62,23 @@ typedef struct VFIOAddressSpace {
     QLIST_ENTRY(VFIOAddressSpace) list;
 } VFIOAddressSpace;
 
-struct VFIOGroup;
+typedef struct VFIOContainer VFIOContainer;
 
-typedef struct VFIOType1 {
-    MemoryListener listener;
-    int error;
-    bool initialized;
-} VFIOType1;
+typedef struct VFIOMemoryListener {
+    struct MemoryListener listener;
+    VFIOContainer *container;
+} VFIOMemoryListener;
+
+struct VFIOGroup;
 
 typedef struct VFIOContainer {
     VFIOAddressSpace *space;
     int fd; /* /dev/vfio/vfio, empowered by the attached groups */
-    struct {
-        /* enable abstraction to support various iommu backends */
-        union {
-            VFIOType1 type1;
-        };
-        void (*release)(struct VFIOContainer *);
-    } iommu_data;
+    unsigned iommu_type;
+    int error;
+    bool initialized;
+    VFIOMemoryListener iommu_listener;
+    void (*release)(struct VFIOContainer *);
     QLIST_HEAD(, VFIOGuestIOMMU) giommu_list;
     QLIST_HEAD(, VFIOGroup) group_list;
     QLIST_ENTRY(VFIOContainer) next;

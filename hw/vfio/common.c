@@ -312,11 +312,10 @@ out:
     rcu_read_unlock();
 }
 
-static void vfio_listener_region_add(MemoryListener *listener,
+static void vfio_listener_region_add(VFIOMemoryListener *vlistener,
                                      MemoryRegionSection *section)
 {
-    VFIOContainer *container = container_of(listener, VFIOContainer,
-                                            iommu_data.type1.listener);
+    VFIOContainer *container = vlistener->container;
     hwaddr iova, end;
     Int128 llend;
     void *vaddr;
@@ -406,9 +405,9 @@ static void vfio_listener_region_add(MemoryListener *listener,
          * can gracefully fail.  Runtime, there's not much we can do other
          * than throw a hardware error.
          */
-        if (!container->iommu_data.type1.initialized) {
-            if (!container->iommu_data.type1.error) {
-                container->iommu_data.type1.error = ret;
+        if (!container->initialized) {
+            if (!container->error) {
+                container->error = ret;
             }
         } else {
             hw_error("vfio: DMA mapping failed, unable to continue");
@@ -416,11 +415,10 @@ static void vfio_listener_region_add(MemoryListener *listener,
     }
 }
 
-static void vfio_listener_region_del(MemoryListener *listener,
+static void vfio_listener_region_del(VFIOMemoryListener *vlistener,
                                      MemoryRegionSection *section)
 {
-    VFIOContainer *container = container_of(listener, VFIOContainer,
-                                            iommu_data.type1.listener);
+    VFIOContainer *container = vlistener->container;
     hwaddr iova, end;
     int ret;
 
@@ -478,14 +476,33 @@ static void vfio_listener_region_del(MemoryListener *listener,
     }
 }
 
-static const MemoryListener vfio_memory_listener = {
-    .region_add = vfio_listener_region_add,
-    .region_del = vfio_listener_region_del,
+static void vfio_iommu_listener_region_add(MemoryListener *listener,
+                                           MemoryRegionSection *section)
+{
+    VFIOMemoryListener *vlistener = container_of(listener, VFIOMemoryListener,
+                                                 listener);
+
+    vfio_listener_region_add(vlistener, section);
+}
+
+
+static void vfio_iommu_listener_region_del(MemoryListener *listener,
+                                           MemoryRegionSection *section)
+{
+    VFIOMemoryListener *vlistener = container_of(listener, VFIOMemoryListener,
+                                                 listener);
+
+    vfio_listener_region_del(vlistener, section);
+}
+
+static const MemoryListener vfio_iommu_listener = {
+    .region_add = vfio_iommu_listener_region_add,
+    .region_del = vfio_iommu_listener_region_del,
 };
 
 static void vfio_listener_release(VFIOContainer *container)
 {
-    memory_listener_unregister(&container->iommu_data.type1.listener);
+    memory_listener_unregister(&container->iommu_listener.listener);
 }
 
 int vfio_mmap_region(Object *obj, VFIORegion *region,
@@ -676,27 +693,28 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        ret = ioctl(fd, VFIO_SET_IOMMU,
-                    v2 ? VFIO_TYPE1v2_IOMMU : VFIO_TYPE1_IOMMU);
+        container->iommu_type = v2 ? VFIO_TYPE1v2_IOMMU : VFIO_TYPE1_IOMMU;
+        ret = ioctl(fd, VFIO_SET_IOMMU, container->iommu_type);
         if (ret) {
             error_report("vfio: failed to set iommu for container: %m");
             ret = -errno;
             goto free_container_exit;
         }
 
-        container->iommu_data.type1.listener = vfio_memory_listener;
-        container->iommu_data.release = vfio_listener_release;
+        container->iommu_listener.container = container;
+        container->iommu_listener.listener = vfio_iommu_listener;
+        container->release = vfio_listener_release;
 
-        memory_listener_register(&container->iommu_data.type1.listener,
+        memory_listener_register(&container->iommu_listener.listener,
                                  container->space->as);
 
-        if (container->iommu_data.type1.error) {
-            ret = container->iommu_data.type1.error;
+        if (container->error) {
+            ret = container->error;
             error_report("vfio: memory listener initialization failed for container");
             goto listener_release_exit;
         }
 
-        container->iommu_data.type1.initialized = true;
+        container->initialized = true;
 
     } else if (ioctl(fd, VFIO_CHECK_EXTENSION, VFIO_SPAPR_TCE_IOMMU)) {
         ret = ioctl(group->fd, VFIO_GROUP_SET_CONTAINER, &fd);
@@ -705,7 +723,8 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             ret = -errno;
             goto free_container_exit;
         }
-        ret = ioctl(fd, VFIO_SET_IOMMU, VFIO_SPAPR_TCE_IOMMU);
+        container->iommu_type = VFIO_SPAPR_TCE_IOMMU;
+        ret = ioctl(fd, VFIO_SET_IOMMU, container->iommu_type);
         if (ret) {
             error_report("vfio: failed to set iommu for container: %m");
             ret = -errno;
@@ -724,10 +743,11 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto free_container_exit;
         }
 
-        container->iommu_data.type1.listener = vfio_memory_listener;
-        container->iommu_data.release = vfio_listener_release;
+        container->iommu_listener.container = container;
+        container->iommu_listener.listener = vfio_iommu_listener;
+        container->release = vfio_listener_release;
 
-        memory_listener_register(&container->iommu_data.type1.listener,
+        memory_listener_register(&container->iommu_listener.listener,
                                  container->space->as);
 
     } else {
@@ -774,8 +794,8 @@ static void vfio_disconnect_container(VFIOGroup *group)
         VFIOAddressSpace *space = container->space;
         VFIOGuestIOMMU *giommu, *tmp;
 
-        if (container->iommu_data.release) {
-            container->iommu_data.release(container);
+        if (container->release) {
+            container->release(container);
         }
         QLIST_REMOVE(container, next);
 
