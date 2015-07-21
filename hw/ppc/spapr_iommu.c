@@ -78,12 +78,13 @@ static uint64_t *spapr_tce_alloc_table(uint32_t liobn,
                                        uint32_t nb_table,
                                        uint32_t page_shift,
                                        int *fd,
-                                       bool vfio_accel)
+                                       bool vfio_accel,
+                                       bool force_userspace)
 {
     uint64_t *table = NULL;
     uint64_t window_size = (uint64_t)nb_table << page_shift;
 
-    if (kvm_enabled() && !(window_size >> 32)) {
+    if (kvm_enabled() && !force_userspace && !(window_size >> 32)) {
         table = kvmppc_create_spapr_tce(liobn, window_size, fd, vfio_accel);
     }
 
@@ -230,7 +231,8 @@ static void spapr_tce_table_do_enable(sPAPRTCETable *tcet, bool vfio_accel)
                                         tcet->nb_table,
                                         tcet->page_shift,
                                         &tcet->fd,
-                                        vfio_accel);
+                                        vfio_accel,
+                                        false);
 
     memory_region_set_size(&tcet->iommu,
                            (uint64_t)tcet->nb_table << tcet->page_shift);
@@ -501,6 +503,69 @@ int spapr_dma_dt(void *fdt, int node_off, const char *propname,
     }
 
     return 0;
+}
+
+static int spapr_tce_do_replay(sPAPRTCETable *tcet, uint64_t *table)
+{
+    target_ulong ioba = tcet->bus_offset, pgsz = (1ULL << tcet->page_shift);
+    long i, ret = 0;
+
+    for (i = 0; i < tcet->nb_table; ++i, ioba += pgsz) {
+        ret = put_tce_emu(tcet, ioba, table[i]);
+        if (ret) {
+            break;
+        }
+    }
+
+    return ret;
+}
+
+int spapr_tce_replay(sPAPRTCETable *tcet)
+{
+    return spapr_tce_do_replay(tcet, tcet->table);
+}
+
+int spapr_tce_realloc(sPAPRTCETable *tcet, bool vfio_accel,
+                      bool force_userspace)
+{
+    int ret, oldfd;
+    uint64_t *oldtable;
+
+    if (force_userspace) {
+        oldtable = tcet->table;
+        oldfd = tcet->fd;
+    } else {
+        unsigned long cb = tcet->nb_table * sizeof(uint64_t);
+        /*
+         * We might be trying to reallocate KVM table.
+         * KVM_CREATE_SPAPR_TCE handler checks for LIOBN and fails if
+         * is registered. Store KVM table locally and destroy the KVM table.
+         */
+        oldtable = g_malloc0(cb);
+        oldfd = -1;
+        memcpy(oldtable, tcet->table, cb);
+        spapr_tce_free_table(tcet->table, tcet->fd, tcet->nb_table);
+    }
+
+    tcet->table = spapr_tce_alloc_table(tcet->liobn,
+                                        tcet->nb_table,
+                                        tcet->page_shift,
+                                        &tcet->fd,
+                                        vfio_accel,
+                                        force_userspace);
+    if (!tcet->table) {
+        return -ENOMEM;
+    }
+
+    ret = spapr_tce_do_replay(tcet, oldtable);
+
+    if (force_userspace) {
+        spapr_tce_free_table(oldtable, oldfd, tcet->nb_table);
+    } else {
+        g_free(oldtable);
+    }
+
+    return ret;
 }
 
 int spapr_tcet_dma_dt(void *fdt, int node_off, const char *propname,

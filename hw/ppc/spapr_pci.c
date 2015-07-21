@@ -870,6 +870,43 @@ int spapr_phb_dma_reset(sPAPRPHBState *sphb)
     return 0;
 }
 
+static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
+{
+    int ret = 0, i;
+    sPAPRTCETable *tcet;
+
+    spapr_phb_dma_capabilities_update(sphb);
+
+    for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+        tcet = spapr_tce_find_by_liobn(SPAPR_PCI_LIOBN(sphb->index, i));
+        if (!tcet || !tcet->enabled) {
+            continue;
+        }
+        if ((tcet->fd >= 0) && (sphb->vfio_num > 0)) {
+            /*
+             * We got first vfio-pci device on accelerated table.
+             * VFIO acceleration is not possible.
+             * Reallocate table in userspace and replay mappings.
+             */
+            ret = spapr_tce_realloc(tcet, true, true);
+            trace_spapr_pci_dma_realloc_update(tcet->liobn, ret);
+        } else if ((tcet->fd < 0) && (sphb->vfio_num > 0)) {
+            /* There was no acceleration, so just replay mappings. */
+            ret = spapr_tce_replay(tcet);
+            trace_spapr_pci_dma_update(tcet->liobn, ret);
+        } else if ((tcet->fd < 0) && (sphb->vfio_num == 0)) {
+            /* Last vfio-pci device is gone, try enabling in-kernel table */
+            ret = spapr_tce_realloc(tcet, false, false);
+            trace_spapr_pci_dma_update(tcet->liobn, ret);
+        }
+        if (ret) {
+            break;
+        }
+    }
+
+    return ret;
+}
+
 /* Macros to operate with address in OF binding to PCI */
 #define b_x(x, p, l)    (((x) & ((1<<(l))-1)) << (p))
 #define b_n(x)          b_x((x), 31, 1) /* 0 if relocatable */
@@ -1149,6 +1186,14 @@ static void spapr_phb_add_pci_device(sPAPRDRConnector *drc,
             error_setg(errp, "Failed to create pci child device tree node");
             goto out;
         }
+        if (object_dynamic_cast(OBJECT(pdev), "vfio-pci")) {
+            unsigned vfio_num = phb->vfio_num;
+
+            ++phb->vfio_num;
+            if (vfio_num == 0) {
+                spapr_phb_hotplug_dma_sync(phb);
+            }
+        }
     }
 
     drck->attach(drc, DEVICE(pdev),
@@ -1161,6 +1206,9 @@ out:
 
 static void spapr_phb_remove_pci_device_cb(DeviceState *dev, void *opaque)
 {
+    bool do_sync = false;
+    sPAPRPHBState *phb = opaque;
+
     /* some version guests do not wait for completion of a device
      * cleanup (generally done asynchronously by the kernel) before
      * signaling to QEMU that the device is safe, but instead sleep
@@ -1172,7 +1220,19 @@ static void spapr_phb_remove_pci_device_cb(DeviceState *dev, void *opaque)
      * an 'idle' state, as the device cleanup code expects.
      */
     pci_device_reset(PCI_DEVICE(dev));
+
+    /* Check if it the last vfio-pci device on a PHB while it is still alive */
+    if (object_dynamic_cast(OBJECT(dev), "vfio-pci")) {
+        --phb->vfio_num;
+        do_sync = phb->vfio_num == 0;
+    }
+
     object_unparent(OBJECT(dev));
+
+    /* Update DMA config, the last vfio-pci might or might not be gone by now */
+    if (do_sync) {
+        spapr_phb_hotplug_dma_sync(phb);
+    }
 }
 
 static void spapr_phb_remove_pci_device(sPAPRDRConnector *drc,
