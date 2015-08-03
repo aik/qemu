@@ -1179,7 +1179,7 @@ static void spapr_phb_hot_plug_child(HotplugHandler *plug_handler,
         return;
     }
     if (plugged_dev->hotplugged) {
-        spapr_hotplug_req_add_event(drc);
+        spapr_hotplug_req_add_by_index(drc);
     }
 }
 
@@ -1207,7 +1207,7 @@ static void spapr_phb_hot_unplug_child(HotplugHandler *plug_handler,
             error_propagate(errp, local_err);
             return;
         }
-        spapr_hotplug_req_remove_event(drc);
+        spapr_hotplug_req_remove_by_index(drc);
     }
 }
 
