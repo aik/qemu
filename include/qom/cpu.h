@@ -144,6 +144,7 @@ typedef struct CPUClass {
                        int flags);
     void (*dump_statistics)(CPUState *cpu, FILE *f,
                             fprintf_function cpu_fprintf, int flags);
+    int (*get_monitor_def)(CPUState *cs, const char *name, uint64_t *pval);
     int64_t (*get_arch_id)(CPUState *cpu);
     bool (*get_paging_enabled)(const CPUState *cpu);
     void (*get_memory_mapping)(CPUState *cpu, MemoryMappingList *list,

@@ -3323,13 +3323,25 @@ static int get_monitor_def(target_long *pval, const char *name)
 {
     const MonitorDef *md;
     void *ptr;
+    CPUState *cs = mon_get_cpu();
+    CPUClass *cc = CPU_GET_CLASS(cs);
+
+    if (cc->get_monitor_def) {
+        uint64_t tmp = 0;
+        int ret = cc->get_monitor_def(cs, name, &tmp);
+
+        if (!ret) {
+            *pval = (target_long) tmp;
+        }
+        return ret;
+    }
 
     for(md = monitor_defs; md->name != NULL; md++) {
         if (compare_cmd(name, md->name)) {
             if (md->get_value) {
                 *pval = md->get_value(md, md->offset);
             } else {
-                CPUArchState *env = mon_get_cpu_env();
+                CPUArchState *env = cs->env_ptr;
                 ptr = (uint8_t *)env + md->offset;
                 switch(md->type) {
                 case MD_I32:
