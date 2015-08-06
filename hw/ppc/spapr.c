@@ -940,6 +940,7 @@ static void spapr_finalize_fdt(sPAPRMachineState *spapr,
 
     qemu_fdt_dumpdtb(fdt, fdt_totalsize(fdt));
     cpu_physical_memory_write(fdt_addr, fdt, fdt_totalsize(fdt));
+    printf("+++Q+++ (%u) %s %u: %d\n", getpid(), __func__, __LINE__, fdt_totalsize(fdt));
 
     g_free(bootlist);
     g_free(fdt);

@@ -145,7 +145,7 @@ extern int mem_prealloc;
  *
  * Note that cpu->get_arch_id() may be larger than MAX_CPUMASK_BITS.
  */
-#define MAX_CPUMASK_BITS 255
+#define MAX_CPUMASK_BITS 4096
 
 #define MAX_OPTION_ROMS 16
 typedef struct QEMUOptionRom {
