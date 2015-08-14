@@ -9706,6 +9706,7 @@ static void ppc_cpu_class_init(ObjectClass *oc, void *data)
     cc->cpu_exec_interrupt = ppc_cpu_exec_interrupt;
     cc->dump_state = ppc_cpu_dump_state;
     cc->dump_statistics = ppc_cpu_dump_statistics;
+    cc->get_monitor_def = ppc_cpu_get_monitor_def;
     cc->set_pc = ppc_cpu_set_pc;
     cc->gdb_read_register = ppc_cpu_gdb_read_register;
     cc->gdb_write_register = ppc_cpu_gdb_write_register;

@@ -11401,6 +11401,86 @@ void ppc_cpu_dump_statistics(CPUState *cs, FILE*f,
 #endif
 }
 
+static bool ppc_cpu_get_reg(target_ulong *regs, const char *numstr, int maxnum,
+                            uint64_t *pval)
+{
+    char *endptr = NULL;
+    int regnum;
+
+    if (!*numstr) {
+        return false;
+    }
+
+    regnum = strtoul(numstr, &endptr, 10);
+    if (*endptr || (regnum >= maxnum)) {
+        return false;
+    }
+    *pval = regs[regnum];
+
+    return true;
+}
+
+int ppc_cpu_get_monitor_def(CPUState *cs, const char *name, uint64_t *pval)
+{
+    int i;
+    PowerPCCPU *cpu = POWERPC_CPU(cs);
+    CPUPPCState *env = &cpu->env;
+
+#define MONREG(s, f) \
+    if ((strcasecmp((s), name) == 0)) { \
+        *pval = (f); \
+        return 0; \
+    }
+    MONREG("pc", env->nip)
+    MONREG("nip", env->nip)
+    MONREG("lr", env->lr)
+    MONREG("ctr", env->ctr)
+    MONREG("xer", env->xer)
+    MONREG("decr", cpu_ppc_load_decr(env))
+    MONREG("msr",  env->msr)
+    MONREG("tbu",  cpu_ppc_load_tbu(env))
+    MONREG("tbl", cpu_ppc_load_tbl(env))
+
+    if ((strcasecmp("ccr", name) == 0) || (strcasecmp("cr", name) == 0)) {
+        unsigned int u = 0;
+
+        for (i = 0; i < 8; i++)
+            u |= env->crf[i] << (32 - (4 * (i + 1)));
+
+        return u;
+    }
+
+    /* General purpose registers */
+    if ((tolower(name[0]) == 'r') &&
+        ppc_cpu_get_reg(env->gpr, name + 1, ARRAY_SIZE(env->gpr), pval)) {
+        return 0;
+    }
+
+    /* Floating point registers */
+    if ((tolower(name[0]) == 'f') &&
+        ppc_cpu_get_reg(env->fpr, name + 1, ARRAY_SIZE(env->fpr), pval)) {
+        return 0;
+    }
+
+    /* Segment registers */
+    if ((strncasecmp(name, "sr", 2) == 0) &&
+        ppc_cpu_get_reg(env->sr, name + 2, ARRAY_SIZE(env->sr), pval)) {
+        return 0;
+    }
+
+    /* Special purpose registers */
+    for (i = 0; i < ARRAY_SIZE(env->spr_cb); ++i) {
+        ppc_spr_t *spr = &env->spr_cb[i];
+
+        if (spr->name && (strcasecmp(name, spr->name) == 0)) {
+            *pval = env->spr[i];
+            return 0;
+        }
+    }
+
+    return -EINVAL;
+}
+
 /*****************************************************************************/
 static inline void gen_intermediate_code_internal(PowerPCCPU *cpu,
                                                   TranslationBlock *tb,
