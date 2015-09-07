@@ -24,6 +24,7 @@
 
 #ifdef CONFIG_LINUX
 #include "linux/vfio.h"
+#include "trace.h"
 
 static Property spapr_phb_vfio_properties[] = {
     DEFINE_PROP_INT32("iommu", sPAPRPHBState, iommugroupid, -1),
@@ -43,6 +44,92 @@ int spapr_phb_vfio_dma_capabilities_update(sPAPRPHBState *sphb)
 
     sphb->dma32_window_start = info.dma32_window_start;
     sphb->dma32_window_size = info.dma32_window_size;
+
+    if (sphb->ddw_enabled && (info.flags & VFIO_IOMMU_SPAPR_INFO_DDW)) {
+        sphb->windows_supported = info.ddw.max_dynamic_windows_supported;
+        sphb->page_size_mask = info.ddw.pgsizes;
+        sphb->dma64_window_size = pow2ceil(ram_size);
+        sphb->max_levels = info.ddw.levels;
+    } else {
+        /* If VFIO_IOMMU_INFO_DDW is not set, disable DDW */
+        sphb->ddw_enabled = false;
+    }
+
+    return ret;
+}
+
+static int spapr_phb_vfio_levels(uint32_t entries)
+{
+    unsigned pages = (entries * sizeof(uint64_t)) / getpagesize();
+    int levels;
+
+    if (pages <= 64) {
+        levels = 1;
+    } else if (pages <= 64*64) {
+        levels = 2;
+    } else if (pages <= 64*64*64) {
+        levels = 3;
+    } else {
+        levels = 4;
+    }
+
+    return levels;
+}
+
+int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
+                                   uint32_t page_shift,
+                                   uint64_t window_size,
+                                   uint64_t *bus_offset)
+{
+    int ret;
+    struct vfio_iommu_spapr_tce_create create = {
+        .argsz = sizeof(create),
+        .page_shift = page_shift,
+        .window_size = window_size,
+        .levels = sphb->levels,
+        .start_addr = 0,
+    };
+
+    /*
+     * Dynamic windows are supported, that means that there is no
+     * pre-created window and we have to create one.
+     */
+    if (!create.levels) {
+        create.levels = spapr_phb_vfio_levels(create.window_size >>
+                                              page_shift);
+    }
+
+    if (create.levels > sphb->max_levels) {
+        return -EINVAL;
+    }
+
+    ret = vfio_container_ioctl(&sphb->iommu_as,
+                               VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
+    if (ret) {
+        return ret;
+    }
+    *bus_offset = create.start_addr;
+
+    trace_spapr_pci_vfio_init_window(page_shift, window_size, *bus_offset);
+
+    return 0;
+}
+
+int spapr_phb_vfio_dma_remove_window(sPAPRPHBState *sphb, uint64_t bus_offset)
+{
+    struct vfio_iommu_spapr_tce_remove remove = {
+        .argsz = sizeof(remove),
+        .start_addr = bus_offset
+    };
+    int ret;
+
+    ret = vfio_container_ioctl(&sphb->iommu_as,
+                               VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
+    if (ret) {
+        return ret;
+    }
+
+    trace_spapr_pci_vfio_remove_window(bus_offset);
 
     return ret;
 }
@@ -235,6 +322,19 @@ int spapr_phb_vfio_eeh_reset(sPAPRPHBState *sphb, int option)
 int spapr_phb_vfio_eeh_configure(sPAPRPHBState *sphb)
 {
     return RTAS_OUT_HW_ERROR;
+}
+
+int spapr_phb_vfio_dma_init_window(sPAPRPHBState *sphb,
+                                   uint32_t page_shift,
+                                   uint64_t window_size,
+                                   uint64_t *bus_offset)
+{
+    return -1;
+}
+
+int spapr_phb_vfio_dma_remove_window(sPAPRPHBState *sphb, uint64_t bus_offset)
+{
+    return -1;
 }
 
 void spapr_phb_vfio_eeh_reenable(sPAPRPHBState *sphb)

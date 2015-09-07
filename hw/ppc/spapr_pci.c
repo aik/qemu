@@ -804,6 +804,9 @@ static int spapr_phb_dma_capabilities_update(sPAPRPHBState *sphb)
 
     sphb->dma32_window_start = 0;
     sphb->dma32_window_size = SPAPR_PCI_DMA32_SIZE;
+    sphb->windows_supported = SPAPR_PCI_DMA_MAX_WINDOWS;
+    sphb->page_size_mask = (1ULL << 12) | (1ULL << 16) | (1ULL << 24);
+    sphb->dma64_window_size = pow2ceil(ram_size);
 
     /* Update the number of VFIO-PCI devices on the PHB */
     sphb->vfio_num = 0;
@@ -819,17 +822,38 @@ static int spapr_phb_dma_capabilities_update(sPAPRPHBState *sphb)
 
     return 0;
 }
-
-static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
-                                     uint32_t liobn, uint32_t page_shift,
-                                     uint64_t window_size)
+int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
+                              uint32_t liobn, uint32_t page_shift,
+                              uint64_t window_size)
 {
     sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
     uint64_t bus_offset = sphb->dma32_window_start;
     uint32_t nb_table = window_size >> page_shift;
+    int ret;
 
     if (!nb_table) {
         return -1;
+    }
+
+    if (SPAPR_PCI_DMA_WINDOW_NUM(liobn) && !sphb->ddw_enabled) {
+        return -1;
+    }
+
+    if (sphb->ddw_enabled) {
+        if (sphb->vfio_num > 0) {
+            ret = spapr_phb_vfio_dma_init_window(sphb, page_shift, window_size,
+                                                 &bus_offset);
+            if (ret) {
+                return ret;
+            }
+        } else if (SPAPR_PCI_DMA_WINDOW_NUM(liobn)) {
+            /*
+             * There is no VFIO so we choose a huge window address.
+             * If VFIO is added later, spapr_phb_hotplug_dma_sync() will fail
+             * and cause hotplug failure.
+             */
+            bus_offset = sphb->dma64_window_start;
+        }
     }
 
     spapr_tce_table_enable(tcet, bus_offset, page_shift, nb_table,
@@ -841,9 +865,16 @@ static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
 int spapr_phb_dma_remove_window(sPAPRPHBState *sphb,
                                 sPAPRTCETable *tcet)
 {
+    int ret = 0;
+    uint64_t bus_offset = tcet->bus_offset;
+
     spapr_tce_table_disable(tcet);
 
-    return 0;
+    if ((sphb->vfio_num > 0) && sphb->ddw_enabled) {
+        ret = spapr_phb_vfio_dma_remove_window(sphb, bus_offset);
+    }
+
+    return ret;
 }
 
 int spapr_phb_dma_reset(sPAPRPHBState *sphb)
@@ -874,8 +905,25 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
 {
     int ret = 0, i;
     sPAPRTCETable *tcet;
+    uint64_t bus_offset = 0;
 
     spapr_phb_dma_capabilities_update(sphb);
+
+    if (sphb->vfio_num > 0) {
+        /*
+         * First vfio-pci device besides in a container with a default 32bit
+         * window. However the PHB might have removed a 32bit window and have
+         * created a 64bit window instead (not in addition) so vfio's window
+         * needs to be removed.
+         */
+        for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+            tcet = spapr_tce_find_by_liobn(SPAPR_PCI_LIOBN(sphb->index, i));
+            if (!tcet) {
+                continue;
+            }
+            spapr_phb_vfio_dma_remove_window(sphb, tcet->bus_offset);
+        }
+    }
 
     for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
         tcet = spapr_tce_find_by_liobn(SPAPR_PCI_LIOBN(sphb->index, i));
@@ -883,6 +931,18 @@ static int spapr_phb_hotplug_dma_sync(sPAPRPHBState *sphb)
             continue;
         }
         if ((tcet->fd >= 0) && (sphb->vfio_num > 0)) {
+            ret = spapr_phb_vfio_dma_init_window(sphb,
+                                                 tcet->page_shift,
+                                                 (uint64_t)tcet->nb_table <<
+                                                 tcet->page_shift,
+                                                 &bus_offset);
+            if (ret) {
+                break;
+            }
+            if (bus_offset != tcet->bus_offset) {
+                ret = -EFAULT;
+                break;
+            }
             /*
              * We got first vfio-pci device on accelerated table.
              * VFIO acceleration is not possible.
@@ -1191,7 +1251,10 @@ static void spapr_phb_add_pci_device(sPAPRDRConnector *drc,
 
             ++phb->vfio_num;
             if (vfio_num == 0) {
-                spapr_phb_hotplug_dma_sync(phb);
+                if (spapr_phb_hotplug_dma_sync(phb)) {
+                    error_setg(errp, "Failed to create DMA window(s)");
+                    goto out;
+                }
             }
         }
     }
@@ -1496,12 +1559,16 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         }
     }
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
-    if (!tcet) {
-        error_report("No default TCE table for %s", sphb->dtbusname);
-        return;
+    for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+        tcet = spapr_tce_new_table(DEVICE(sphb),
+                                   SPAPR_PCI_LIOBN(sphb->index, i));
+        if (!tcet) {
+            error_setg(errp, "spapr_tce_new_table failed");
+            return;
+        }
+        memory_region_add_subregion_overlap(&sphb->iommu_root, 0,
+                                            spapr_tce_get_iommu(tcet), 0);
     }
-    memory_region_add_subregion(&sphb->iommu_root, 0, spapr_tce_get_iommu(tcet));
 
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
 }
@@ -1547,8 +1614,12 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT64("io_win_addr", sPAPRPHBState, io_win_addr, -1),
     DEFINE_PROP_UINT64("io_win_size", sPAPRPHBState, io_win_size,
                        SPAPR_PCI_IO_WIN_SIZE),
+    DEFINE_PROP_UINT64("dma64_win_addr", sPAPRPHBState, dma64_window_start,
+                       SPAPR_PCI_DMA64_START),
     DEFINE_PROP_BOOL("dynamic-reconfiguration", sPAPRPHBState, dr_enabled,
                      true),
+    DEFINE_PROP_BOOL("ddw", sPAPRPHBState, ddw_enabled, true),
+    DEFINE_PROP_UINT8("levels", sPAPRPHBState, levels, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -1807,6 +1878,15 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     uint32_t interrupt_map_mask[] = {
         cpu_to_be32(b_ddddd(-1)|b_fff(0)), 0x0, 0x0, cpu_to_be32(-1)};
     uint32_t interrupt_map[PCI_SLOT_MAX * PCI_NUM_PINS][7];
+    uint32_t ddw_applicable[] = {
+        cpu_to_be32(RTAS_IBM_QUERY_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_CREATE_PE_DMA_WINDOW),
+        cpu_to_be32(RTAS_IBM_REMOVE_PE_DMA_WINDOW)
+    };
+    uint32_t ddw_extensions[] = {
+        cpu_to_be32(1),
+        cpu_to_be32(RTAS_IBM_RESET_PE_DMA_WINDOW)
+    };
     sPAPRTCETable *tcet;
     PCIBus *bus = PCI_HOST_BRIDGE(phb)->bus;
     sPAPRFDT s_fdt;
@@ -1830,6 +1910,14 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     _FDT(fdt_setprop(fdt, bus_off, "reg", &bus_reg, sizeof(bus_reg)));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pci-config-space-type", 0x1));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pe-total-#msi", XICS_IRQS));
+
+    /* Dynamic DMA window */
+    if (phb->ddw_enabled) {
+        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable", &ddw_applicable,
+                         sizeof(ddw_applicable)));
+        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-extensions",
+                         &ddw_extensions, sizeof(ddw_extensions)));
+    }
 
     /* Build the interrupt-map, this must matches what is done
      * in pci_spapr_map_irq

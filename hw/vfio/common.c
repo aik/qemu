@@ -1005,6 +1005,8 @@ int vfio_container_ioctl(AddressSpace *as, int req, void *param)
     case VFIO_CHECK_EXTENSION:
     case VFIO_IOMMU_SPAPR_TCE_GET_INFO:
     case VFIO_EEH_PE_OP:
+    case VFIO_IOMMU_SPAPR_TCE_CREATE:
+    case VFIO_IOMMU_SPAPR_TCE_REMOVE:
         break;
     default:
         /* Return an error on unknown requests */

@@ -1303,6 +1303,8 @@ spapr_pci_lsi_set(const char *busname, int pin, uint32_t irq) "%s PIN%d IRQ %u"
 spapr_pci_msi_retry(unsigned config_addr, unsigned req_num, unsigned max_irqs) "Guest device at %x asked %u, have only %u"
 spapr_pci_dma_update(uint64_t liobn, long ret) "liobn=%"PRIx64" ret=%ld"
 spapr_pci_dma_realloc_update(uint64_t liobn, long ret) "liobn=%"PRIx64" tcet=%ld"
+spapr_pci_vfio_init_window(int ps, uint64_t ws, uint64_t off) "pageshift=0x%x winsize=0x%"PRIx64" offset=0x%"PRIx64
+spapr_pci_vfio_remove_window(uint64_t off) "offset=%"PRIx64
 
 # hw/pci/pci.c
 pci_update_mappings_del(void *d, uint32_t bus, uint32_t func, uint32_t slot, int bar, uint64_t addr, uint64_t size) "d=%p %02x:%02x.%x %d,%#"PRIx64"+%#"PRIx64
@@ -1366,6 +1368,10 @@ spapr_iommu_pci_indirect(uint64_t liobn, uint64_t ioba, uint64_t tce, uint64_t i
 spapr_iommu_pci_stuff(uint64_t liobn, uint64_t ioba, uint64_t tce_value, uint64_t npages, uint64_t ret) "liobn=%"PRIx64" ioba=0x%"PRIx64" tcevalue=0x%"PRIx64" npages=%"PRId64" ret=%"PRId64
 spapr_iommu_xlate(uint64_t liobn, uint64_t ioba, uint64_t tce, unsigned perm, unsigned pgsize) "liobn=%"PRIx64" 0x%"PRIx64" -> 0x%"PRIx64" perm=%u mask=%x"
 spapr_iommu_alloc_table(uint64_t liobn, void *table, int fd) "liobn=%"PRIx64" table=%p fd=%d"
+spapr_iommu_ddw_query(uint64_t buid, uint32_t cfgaddr, unsigned wa, uint64_t win_size, uint32_t pgmask) "buid=%"PRIx64" addr=%"PRIx32", %u windows available, max window size=%"PRIx64", mask=%"PRIx32
+spapr_iommu_ddw_create(uint64_t buid, uint32_t cfgaddr, uint64_t pg_size, uint64_t req_size, uint64_t start, uint32_t liobn, long ret) "buid=%"PRIx64" addr=%"PRIx32", page size=0x%"PRIx64", requested=0x%"PRIx64", start addr=%"PRIx64", liobn=%"PRIx32", ret = %ld"
+spapr_iommu_ddw_remove(uint32_t liobn, long ret) "liobn=%"PRIx32", ret = %ld"
+spapr_iommu_ddw_reset(uint64_t buid, uint32_t cfgaddr, long ret) "buid=%"PRIx64" addr=%"PRIx32", ret = %ld"
 
 # hw/ppc/ppc.c
 ppc_tb_adjust(uint64_t offs1, uint64_t offs2, int64_t diff, int64_t seconds) "adjusted from 0x%"PRIx64" to 0x%"PRIx64", diff %"PRId64" (%"PRId64"s)"

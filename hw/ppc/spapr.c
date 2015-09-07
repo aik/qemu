@@ -2220,6 +2220,11 @@ static const TypeInfo spapr_machine_info = {
             .driver   = "spapr-pci-host-bridge",\
             .property = "dynamic-reconfiguration",\
             .value    = "off",\
+        },\
+        {\
+            .driver   = TYPE_SPAPR_PCI_HOST_BRIDGE,\
+            .property = "ddw",\
+            .value    = stringify(off),\
         },
 
 #define SPAPR_COMPAT_2_2 \

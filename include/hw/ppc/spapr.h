@@ -415,6 +415,16 @@ int spapr_allocate_irq_block(int num, bool lsi, bool msi);
 #define RTAS_OUT_NO_SUCH_INDICATOR  -3
 #define RTAS_OUT_NOT_AUTHORIZED     -9002
 
+/* DDW pagesize mask values from ibm,query-pe-dma-window */
+#define RTAS_DDW_PGSIZE_4K       0x01
+#define RTAS_DDW_PGSIZE_64K      0x02
+#define RTAS_DDW_PGSIZE_16M      0x04
+#define RTAS_DDW_PGSIZE_32M      0x08
+#define RTAS_DDW_PGSIZE_64M      0x10
+#define RTAS_DDW_PGSIZE_128M     0x20
+#define RTAS_DDW_PGSIZE_256M     0x40
+#define RTAS_DDW_PGSIZE_16G      0x80
+
 /* RTAS tokens */
 #define RTAS_TOKEN_BASE      0x2000
 
@@ -456,8 +466,12 @@ int spapr_allocate_irq_block(int num, bool lsi, bool msi);
 #define RTAS_IBM_SET_SLOT_RESET                 (RTAS_TOKEN_BASE + 0x23)
 #define RTAS_IBM_CONFIGURE_PE                   (RTAS_TOKEN_BASE + 0x24)
 #define RTAS_IBM_SLOT_ERROR_DETAIL              (RTAS_TOKEN_BASE + 0x25)
+#define RTAS_IBM_QUERY_PE_DMA_WINDOW            (RTAS_TOKEN_BASE + 0x26)
+#define RTAS_IBM_CREATE_PE_DMA_WINDOW           (RTAS_TOKEN_BASE + 0x27)
+#define RTAS_IBM_REMOVE_PE_DMA_WINDOW           (RTAS_TOKEN_BASE + 0x28)
+#define RTAS_IBM_RESET_PE_DMA_WINDOW            (RTAS_TOKEN_BASE + 0x29)
 
-#define RTAS_TOKEN_MAX                          (RTAS_TOKEN_BASE + 0x26)
+#define RTAS_TOKEN_MAX                          (RTAS_TOKEN_BASE + 0x2A)
 
 /* RTAS ibm,get-system-parameter token values */
 #define RTAS_SYSPARM_SPLPAR_CHARACTERISTICS      20
@@ -562,6 +576,7 @@ struct sPAPRTCETable {
     uint64_t bus_offset;
     uint32_t page_shift;
     uint64_t *table;
+    uint64_t *migtable;
     bool bypass;
     int fd;
     MemoryRegion root, iommu;
