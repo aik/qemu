@@ -430,7 +430,6 @@ static void rtas_ibm_set_eeh_option(PowerPCCPU *cpu,
                                     target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     PCIDevice *pdev;
     uint32_t addr, option;
     uint64_t buid;
@@ -445,7 +444,7 @@ static void rtas_ibm_set_eeh_option(PowerPCCPU *cpu,
     option = rtas_ld(args, 3);
 
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
@@ -455,12 +454,7 @@ static void rtas_ibm_set_eeh_option(PowerPCCPU *cpu,
         goto param_error_exit;
     }
 
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_set_option) {
-        goto param_error_exit;
-    }
-
-    ret = spc->eeh_set_option(sphb, addr, option);
+    ret = spapr_phb_vfio_eeh_set_option(sphb, pdev, option);
     rtas_st(rets, 0, ret);
     return;
 
@@ -475,7 +469,6 @@ static void rtas_ibm_get_config_addr_info2(PowerPCCPU *cpu,
                                            target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     PCIDevice *pdev;
     uint32_t addr, option;
     uint64_t buid;
@@ -486,12 +479,7 @@ static void rtas_ibm_get_config_addr_info2(PowerPCCPU *cpu,
 
     buid = rtas_ldq(args, 1);
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
-        goto param_error_exit;
-    }
-
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_set_option) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
@@ -531,7 +519,6 @@ static void rtas_ibm_read_slot_reset_state2(PowerPCCPU *cpu,
                                             target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     uint64_t buid;
     int state, ret;
 
@@ -541,16 +528,11 @@ static void rtas_ibm_read_slot_reset_state2(PowerPCCPU *cpu,
 
     buid = rtas_ldq(args, 1);
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_get_state) {
-        goto param_error_exit;
-    }
-
-    ret = spc->eeh_get_state(sphb, &state);
+    ret = spapr_phb_vfio_eeh_get_state(sphb, &state);
     rtas_st(rets, 0, ret);
     if (ret != RTAS_OUT_SUCCESS) {
         return;
@@ -575,7 +557,6 @@ static void rtas_ibm_set_slot_reset(PowerPCCPU *cpu,
                                     target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     uint32_t option;
     uint64_t buid;
     int ret;
@@ -587,16 +568,11 @@ static void rtas_ibm_set_slot_reset(PowerPCCPU *cpu,
     buid = rtas_ldq(args, 1);
     option = rtas_ld(args, 3);
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_reset) {
-        goto param_error_exit;
-    }
-
-    ret = spc->eeh_reset(sphb, option);
+    ret = spapr_phb_vfio_eeh_reset(sphb, option);
     rtas_st(rets, 0, ret);
     return;
 
@@ -611,7 +587,6 @@ static void rtas_ibm_configure_pe(PowerPCCPU *cpu,
                                   target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     uint64_t buid;
     int ret;
 
@@ -621,16 +596,11 @@ static void rtas_ibm_configure_pe(PowerPCCPU *cpu,
 
     buid = rtas_ldq(args, 1);
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_configure) {
-        goto param_error_exit;
-    }
-
-    ret = spc->eeh_configure(sphb);
+    ret = spapr_phb_vfio_eeh_configure(sphb);
     rtas_st(rets, 0, ret);
     return;
 
@@ -646,7 +616,6 @@ static void rtas_ibm_slot_error_detail(PowerPCCPU *cpu,
                                        target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    sPAPRPHBClass *spc;
     int option;
     uint64_t buid;
 
@@ -656,12 +625,7 @@ static void rtas_ibm_slot_error_detail(PowerPCCPU *cpu,
 
     buid = rtas_ldq(args, 1);
     sphb = spapr_pci_find_phb(spapr, buid);
-    if (!sphb) {
-        goto param_error_exit;
-    }
-
-    spc = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(sphb);
-    if (!spc->eeh_set_option) {
+    if (!sphb || (sphb->vfio_num == 0)) {
         goto param_error_exit;
     }
 
@@ -808,6 +772,102 @@ static char *spapr_phb_get_loc_code(sPAPRPHBState *sphb, PCIDevice *pdev)
                           devtype, pdev->name, sphb->index, busnr,
                           PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn));
     return buf;
+}
+
+static void spapr_phb_walk_devices(PCIBus *bus, PCIDevice *pdev, void *opaque)
+{
+    sPAPRPHBState *sphb = opaque;
+    PCIBus *sec_bus;
+
+    if (object_dynamic_cast(OBJECT(pdev), "vfio-pci")) {
+        ++sphb->vfio_num;
+    }
+
+    if ((pci_default_read_config(pdev, PCI_HEADER_TYPE, 1) !=
+         PCI_HEADER_TYPE_BRIDGE)) {
+        return;
+    }
+
+    sec_bus = pci_bridge_get_sec_bus(PCI_BRIDGE(pdev));
+    if (!sec_bus) {
+        return;
+    }
+
+    pci_for_each_device(sec_bus, pci_bus_num(sec_bus),
+                        spapr_phb_walk_devices, sphb);
+}
+
+static int spapr_phb_dma_capabilities_update(sPAPRPHBState *sphb)
+{
+    int ret;
+    PCIBus *bus = PCI_HOST_BRIDGE(sphb)->bus;
+
+    sphb->dma32_window_start = 0;
+    sphb->dma32_window_size = SPAPR_PCI_DMA32_SIZE;
+
+    /* Update the number of VFIO-PCI devices on the PHB */
+    sphb->vfio_num = 0;
+    pci_for_each_device(bus, pci_bus_num(bus), spapr_phb_walk_devices, sphb);
+
+    if (sphb->vfio_num) {
+        if (sphb->iommugroupid == -1) {
+            error_report("Wrong IOMMU group ID %d", sphb->iommugroupid);
+            return -1;
+        }
+
+        ret = spapr_phb_vfio_dma_capabilities_update(sphb);
+        if (ret) {
+            error_report("Unable to get DMA32 info from VFIO");
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
+static int spapr_phb_dma_init_window(sPAPRPHBState *sphb,
+                                     uint32_t liobn, uint32_t page_shift,
+                                     uint64_t window_size)
+{
+    sPAPRTCETable *tcet;
+    uint64_t bus_offset = sphb->dma32_window_start;
+    uint32_t nb_table = window_size >> page_shift;
+
+    if (!nb_table) {
+        return -1;
+    }
+
+    tcet = spapr_tce_new_table(DEVICE(sphb), liobn, bus_offset,
+                               page_shift, nb_table, sphb->vfio_num > 0);
+
+    return tcet ? 0 : -1;
+}
+
+static int spapr_phb_dma_reset(sPAPRPHBState *sphb)
+{
+    sPAPRTCETable *tcet;
+
+    if (spapr_phb_dma_capabilities_update(sphb)) {
+        return -1;
+    }
+
+    /* Register default 32bit DMA window */
+    tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
+    if (!tcet) {
+        spapr_phb_dma_init_window(sphb, sphb->dma_liobn, SPAPR_TCE_PAGE_SHIFT,
+                                  sphb->dma32_window_size);
+
+        tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
+        if (!tcet) {
+            error_report("No default TCE table for %s", sphb->dtbusname);
+            return -1;
+        }
+
+        memory_region_add_subregion(&sphb->iommu_root, tcet->bus_offset,
+                                    spapr_tce_get_iommu(tcet));
+    }
+
+    return 0;
 }
 
 /* Macros to operate with address in OF binding to PCI */
@@ -1217,7 +1277,6 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     SysBusDevice *s = SYS_BUS_DEVICE(dev);
     sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(s);
     PCIHostState *phb = PCI_HOST_BRIDGE(s);
-    sPAPRPHBClass *info = SPAPR_PCI_HOST_BRIDGE_GET_CLASS(s);
     char *namebuf;
     int i;
     PCIBus *bus;
@@ -1371,33 +1430,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         }
     }
 
-    if (!info->finish_realize) {
-        error_setg(errp, "finish_realize not defined");
-        return;
-    }
-
-    info->finish_realize(sphb, errp);
-
     sphb->msi = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, g_free);
-}
-
-static void spapr_phb_finish_realize(sPAPRPHBState *sphb, Error **errp)
-{
-    sPAPRTCETable *tcet;
-    uint32_t nb_table;
-
-    nb_table = SPAPR_PCI_DMA32_SIZE >> SPAPR_TCE_PAGE_SHIFT;
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn,
-                               0, SPAPR_TCE_PAGE_SHIFT, nb_table, false);
-    if (!tcet) {
-        error_setg(errp, "Unable to create TCE table for %s",
-                   sphb->dtbusname);
-        return ;
-    }
-
-    /* Register default 32bit DMA window */
-    memory_region_add_subregion(&sphb->iommu_root, 0,
-                                spapr_tce_get_iommu(tcet));
 }
 
 static int spapr_phb_children_reset(Object *child, void *opaque)
@@ -1413,8 +1446,22 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
 
 static void spapr_phb_reset(DeviceState *qdev)
 {
+    sPAPRPHBState *sphb = SPAPR_PCI_HOST_BRIDGE(qdev);
+
+    spapr_phb_dma_reset(sphb);
+
     /* Reset the IOMMU state */
     object_child_foreach(OBJECT(qdev), spapr_phb_children_reset, NULL);
+
+    if (sphb->vfio_num > 0) {
+        /*
+         * The PE might be in frozen state. To reenable the EEH
+         * functionality on it will clean the frozen state, which
+         * ensures that the contained PCI devices will work properly
+         * after reboot.
+         */
+        spapr_phb_vfio_eeh_reenable(sphb);
+    }
 }
 
 static Property spapr_phb_properties[] = {
@@ -1535,7 +1582,6 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
 {
     PCIHostBridgeClass *hc = PCI_HOST_BRIDGE_CLASS(klass);
     DeviceClass *dc = DEVICE_CLASS(klass);
-    sPAPRPHBClass *spc = SPAPR_PCI_HOST_BRIDGE_CLASS(klass);
     HotplugHandlerClass *hp = HOTPLUG_HANDLER_CLASS(klass);
 
     hc->root_bus_path = spapr_phb_root_bus_path;
@@ -1545,7 +1591,6 @@ static void spapr_phb_class_init(ObjectClass *klass, void *data)
     dc->vmsd = &vmstate_spapr_pci;
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->cannot_instantiate_with_device_add_yet = false;
-    spc->finish_realize = spapr_phb_finish_realize;
     hp->plug = spapr_phb_hot_plug_child;
     hp->unplug = spapr_phb_hot_unplug_child;
 }
