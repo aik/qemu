@@ -810,11 +810,6 @@ static int spapr_phb_dma_capabilities_update(sPAPRPHBState *sphb)
     pci_for_each_device(bus, pci_bus_num(bus), spapr_phb_walk_devices, sphb);
 
     if (sphb->vfio_num) {
-        if (sphb->iommugroupid == -1) {
-            error_report("Wrong IOMMU group ID %d", sphb->iommugroupid);
-            return -1;
-        }
-
         ret = spapr_phb_vfio_dma_capabilities_update(sphb);
         if (ret) {
             error_report("Unable to get DMA32 info from VFIO");
@@ -1281,6 +1276,11 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     int i;
     PCIBus *bus;
     uint64_t msi_window_size = 4096;
+
+    if ((sphb->iommugroupid != -1) &&
+        object_dynamic_cast(OBJECT(sphb), TYPE_SPAPR_PCI_VFIO_HOST_BRIDGE)) {
+        error_report("Warning: iommugroupid is deprecated and will be ignored");
+    }
 
     if (sphb->index != (uint32_t)-1) {
         hwaddr windows_base;

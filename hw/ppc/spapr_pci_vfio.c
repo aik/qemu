@@ -35,7 +35,7 @@ int spapr_phb_vfio_dma_capabilities_update(sPAPRPHBState *sphb)
     struct vfio_iommu_spapr_tce_info info = { .argsz = sizeof(info) };
     int ret;
 
-    ret = vfio_container_ioctl(&sphb->iommu_as, sphb->iommugroupid,
+    ret = vfio_container_ioctl(&sphb->iommu_as,
                                VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
     if (ret) {
         return ret;
@@ -54,8 +54,7 @@ void spapr_phb_vfio_eeh_reenable(sPAPRPHBState *sphb)
         .op    = VFIO_EEH_PE_ENABLE
     };
 
-    vfio_container_ioctl(&sphb->iommu_as,
-                         sphb->iommugroupid, VFIO_EEH_PE_OP, &op);
+    vfio_container_ioctl(&sphb->iommu_as, VFIO_EEH_PE_OP, &op);
 }
 
 int spapr_phb_vfio_eeh_set_option(sPAPRPHBState *sphb,
@@ -81,8 +80,7 @@ int spapr_phb_vfio_eeh_set_option(sPAPRPHBState *sphb,
         return RTAS_OUT_PARAM_ERROR;
     }
 
-    ret = vfio_container_ioctl(&sphb->iommu_as, sphb->iommugroupid,
-                               VFIO_EEH_PE_OP, &op);
+    ret = vfio_container_ioctl(&sphb->iommu_as, VFIO_EEH_PE_OP, &op);
     if (ret < 0) {
         return RTAS_OUT_HW_ERROR;
     }
@@ -96,8 +94,7 @@ int spapr_phb_vfio_eeh_get_state(sPAPRPHBState *sphb, int *state)
     int ret;
 
     op.op = VFIO_EEH_PE_GET_STATE;
-    ret = vfio_container_ioctl(&sphb->iommu_as, sphb->iommugroupid,
-                               VFIO_EEH_PE_OP, &op);
+    ret = vfio_container_ioctl(&sphb->iommu_as, VFIO_EEH_PE_OP, &op);
     if (ret < 0) {
         return RTAS_OUT_PARAM_ERROR;
     }
@@ -170,8 +167,7 @@ int spapr_phb_vfio_eeh_reset(sPAPRPHBState *sphb, int option)
         return RTAS_OUT_PARAM_ERROR;
     }
 
-    ret = vfio_container_ioctl(&sphb->iommu_as, sphb->iommugroupid,
-                               VFIO_EEH_PE_OP, &op);
+    ret = vfio_container_ioctl(&sphb->iommu_as, VFIO_EEH_PE_OP, &op);
     if (ret < 0) {
         return RTAS_OUT_HW_ERROR;
     }
@@ -185,8 +181,7 @@ int spapr_phb_vfio_eeh_configure(sPAPRPHBState *sphb)
     int ret;
 
     op.op = VFIO_EEH_PE_CONFIGURE;
-    ret = vfio_container_ioctl(&sphb->iommu_as, sphb->iommugroupid,
-                               VFIO_EEH_PE_OP, &op);
+    ret = vfio_container_ioctl(&sphb->iommu_as, VFIO_EEH_PE_OP, &op);
     if (ret < 0) {
         return RTAS_OUT_PARAM_ERROR;
     }
