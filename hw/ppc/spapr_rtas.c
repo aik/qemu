@@ -372,6 +372,7 @@ static void rtas_set_indicator(PowerPCCPU *cpu, sPAPRMachineState *spapr,
     uint32_t sensor_type;
     uint32_t sensor_index;
     uint32_t sensor_state;
+    int drc_ret, ret = RTAS_OUT_SUCCESS;
     sPAPRDRConnector *drc;
     sPAPRDRConnectorClass *drck;
 
@@ -413,7 +414,11 @@ static void rtas_set_indicator(PowerPCCPU *cpu, sPAPRMachineState *spapr,
                 spapr_ccs_remove(spapr, ccs);
             }
         }
-        drck->set_isolation_state(drc, sensor_state);
+        drc_ret = drck->set_isolation_state(drc, sensor_state);
+        if (drc_ret != 0) {
+            ret = (drc_ret == -1) ? RTAS_OUT_NO_SUCH_INDICATOR
+                                  : RTAS_OUT_HW_ERROR;
+        }
         break;
     case RTAS_SENSOR_TYPE_DR:
         drck->set_indicator_state(drc, sensor_state);
@@ -425,7 +430,7 @@ static void rtas_set_indicator(PowerPCCPU *cpu, sPAPRMachineState *spapr,
         goto out_unimplemented;
     }
 
-    rtas_st(rets, 0, RTAS_OUT_SUCCESS);
+    rtas_st(rets, 0, ret);
     return;
 
 out_unimplemented:

@@ -66,6 +66,18 @@ static int set_isolation_state(sPAPRDRConnector *drc,
 
     DPRINTFN("drc: %x, set_isolation_state: %x", get_index(drc), state);
 
+    if (state == SPAPR_DR_ISOLATION_STATE_UNISOLATED) {
+        /* cannot unisolate a non-existant resource. this generally
+         * happens for logical resources where transitions from
+         * allocation-state:UNUSABLE to allocation-state:USABLE are
+         * unguarded, but instead rely on a subsequent
+         * isolation-state:UNISOLATED transition to indicate failure
+         */
+        if (!drc->dev) {
+            return -1;
+        }
+    }
+
     drc->isolation_state = state;
 
     if (drc->isolation_state == SPAPR_DR_ISOLATION_STATE_ISOLATED) {

@@ -165,6 +165,8 @@ typedef struct sPAPRDRConnectorClass {
     /*< public >*/
 
     /* accessors for guest-visible (generally via RTAS) DR state */
+
+    /* returns -1 if DRC cannot be set to requested isolation state */
     int (*set_isolation_state)(sPAPRDRConnector *drc,
                                sPAPRDRIsolationState state);
     int (*set_indicator_state)(sPAPRDRConnector *drc,
