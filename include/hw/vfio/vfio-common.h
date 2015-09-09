@@ -78,6 +78,7 @@ typedef struct VFIOContainer {
     int error;
     bool initialized;
     VFIOMemoryListener iommu_listener;
+    VFIOMemoryListener prereg_listener;
     void (*release)(struct VFIOContainer *);
     QLIST_HEAD(, VFIOGuestIOMMU) giommu_list;
     QLIST_HEAD(, VFIOGroup) group_list;
@@ -144,5 +145,8 @@ int vfio_get_device(VFIOGroup *group, const char *name,
 extern const MemoryRegionOps vfio_region_ops;
 extern QLIST_HEAD(vfio_group_head, VFIOGroup) vfio_group_list;
 extern QLIST_HEAD(vfio_as_head, VFIOAddressSpace) vfio_address_spaces;
+
+extern const MemoryListener vfio_prereg_listener;
+hwaddr vfio_iommu_page_mask(MemoryRegion *mr);
 
 #endif /* !HW_VFIO_VFIO_COMMON_H */
