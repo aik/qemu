@@ -883,10 +883,12 @@ int spapr_phb_dma_remove_window(sPAPRPHBState *sphb,
 {
     int ret = 0;
     uint64_t bus_offset = tcet->bus_offset;
+    bool do_remove = tcet->enabled ||
+        (0 == SPAPR_PCI_DMA_WINDOW_NUM(tcet->liobn));
 
     spapr_tce_table_disable(tcet);
 
-    if ((sphb->vfio_num > 0) && sphb->ddw_enabled) {
+    if ((sphb->vfio_num > 0) && sphb->ddw_enabled && do_remove) {
         ret = spapr_phb_vfio_dma_remove_window(sphb, bus_offset);
     }
 
