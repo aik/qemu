@@ -358,7 +358,7 @@ static void spapr_tce_table_do_disable(sPAPRTCETable *tcet)
     tcet->nb_table = 0;
 }
 
-static void spapr_tce_table_disable(sPAPRTCETable *tcet)
+void spapr_tce_table_disable(sPAPRTCETable *tcet)
 {
     if (!tcet->enabled) {
         error_report("Warning: trying to disable already disabled TCE table");
