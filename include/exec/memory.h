@@ -150,6 +150,8 @@ typedef struct MemoryRegionIOMMUOps MemoryRegionIOMMUOps;
 struct MemoryRegionIOMMUOps {
     /* Return a TLB entry that contains a given address. */
     IOMMUTLBEntry (*translate)(MemoryRegion *iommu, hwaddr addr, bool is_write);
+    /* Returns supported page sizes */
+    uint64_t (*get_page_sizes)(MemoryRegion *iommu);
 };
 
 typedef struct CoalescedMemoryRange CoalescedMemoryRange;
@@ -573,6 +575,15 @@ static inline bool memory_region_is_iommu(MemoryRegion *mr)
 
 
 /**
+ * memory_region_iommu_get_page_sizes: get supported page sizes in an iommu
+ *
+ * Returns %bitmap of supported page sizes for an iommu.
+ *
+ * @mr: the memory region being queried
+ */
+uint64_t memory_region_iommu_get_page_sizes(MemoryRegion *mr);
+
+/**
  * memory_region_notify_iommu: notify a change in an IOMMU translation entry.
  *
  * @mr: the memory region that was changed
@@ -596,16 +607,15 @@ void memory_region_register_iommu_notifier(MemoryRegion *mr, Notifier *n);
 
 /**
  * memory_region_iommu_replay: replay existing IOMMU translations to
- * a notifier
+ * a notifier with the minimum page granularity returned by
+ * mr->iommu_ops->get_page_sizes().
  *
  * @mr: the memory region to observe
  * @n: the notifier to which to replay iommu mappings
- * @granularity: Minimum page granularity to replay notifications for
  * @is_write: Whether to treat the replay as a translate "write"
  *     through the iommu
  */
-void memory_region_iommu_replay(MemoryRegion *mr, Notifier *n,
-                                hwaddr granularity, bool is_write);
+void memory_region_iommu_replay(MemoryRegion *mr, Notifier *n, bool is_write);
 
 /**
  * memory_region_unregister_iommu_notifier: unregister a notifier for

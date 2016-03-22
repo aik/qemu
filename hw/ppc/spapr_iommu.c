@@ -148,6 +148,13 @@ static void spapr_tce_table_pre_save(void *opaque)
                                tcet->bus_offset, tcet->page_shift);
 }
 
+static uint64_t spapr_tce_get_page_sizes(MemoryRegion *iommu)
+{
+    sPAPRTCETable *tcet = container_of(iommu, sPAPRTCETable, iommu);
+
+    return 1ULL << tcet->page_shift;
+}
+
 static void spapr_tce_table_do_enable(sPAPRTCETable *tcet);
 static void spapr_tce_table_do_disable(sPAPRTCETable *tcet);
 
@@ -231,6 +238,7 @@ static const VMStateDescription vmstate_spapr_tce_table = {
 
 static MemoryRegionIOMMUOps spapr_iommu_ops = {
     .translate = spapr_tce_translate_iommu,
+    .get_page_sizes = spapr_tce_get_page_sizes,
 };
 
 static int spapr_tce_table_realize(DeviceState *dev)

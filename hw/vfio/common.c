@@ -319,11 +319,6 @@ out:
     rcu_read_unlock();
 }
 
-static hwaddr vfio_container_granularity(VFIOContainer *container)
-{
-    return (hwaddr)1 << ctz64(container->iova_pgsizes);
-}
-
 static void vfio_listener_region_add(MemoryListener *listener,
                                      MemoryRegionSection *section)
 {
@@ -391,7 +386,6 @@ static void vfio_listener_region_add(MemoryListener *listener,
 
         memory_region_register_iommu_notifier(giommu->iommu, &giommu->n);
         memory_region_iommu_replay(giommu->iommu, &giommu->n,
-                                   vfio_container_granularity(container),
                                    false);
 
         return;
