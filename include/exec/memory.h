@@ -156,6 +156,8 @@ struct MemoryRegionIOMMUOps {
     void (*vfio_start)(MemoryRegion *iommu);
     /* Called when VFIO stops using this */
     void (*vfio_stop)(MemoryRegion *iommu);
+    /* Returns an ID for KVM */
+    uint64_t (*get_kvm_id)(MemoryRegion *iommu);
 };
 
 typedef struct CoalescedMemoryRange CoalescedMemoryRange;

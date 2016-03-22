@@ -492,6 +492,38 @@ static void vfio_listener_region_add(MemoryListener *listener,
         memory_region_iommu_replay(giommu->iommu, &giommu->n,
                                    false);
 
+#ifdef CONFIG_KVM
+        if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU &&
+            section->mr->iommu_ops->get_kvm_id) {
+
+            uint64_t liobn = section->mr->iommu_ops->get_kvm_id(section->mr);
+
+            if (vfio_kvm_device_fd >= 0 && liobn != (uint64_t)-1) {
+                struct kvm_vfio_spapr_tce_liobn param = {
+                    .argsz = sizeof(param),
+                    .fd = -1,
+                    .liobn = liobn,
+                    .start_addr = section->offset_within_address_space,
+                };
+                struct kvm_device_attr attr = {
+                    .group = KVM_DEV_VFIO_GROUP,
+                    .attr = KVM_DEV_VFIO_GROUP_SET_SPAPR_TCE_LIOBN,
+                    .addr = (uint64_t)(unsigned long)&param,
+                };
+                VFIOGroup *group;
+
+                QLIST_FOREACH(group, &container->group_list, next) {
+                    param.fd = group->fd;
+                    ret = ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr);
+                    if (ret) {
+                        error_report("vfio: failed to setup liobn for a group: %s",
+                                     strerror(errno));
+                    }
+                }
+
+            }
+        }
+#endif
         return;
     }
 

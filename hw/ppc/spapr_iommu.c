@@ -166,6 +166,17 @@ static void spapr_tce_vfio_stop(MemoryRegion *iommu)
     spapr_tce_set_need_vfio(container_of(iommu, sPAPRTCETable, iommu), false);
 }
 
+static uint64_t spapr_tce_get_kvm_id(MemoryRegion *iommu)
+{
+    sPAPRTCETable *tcet = container_of(iommu, sPAPRTCETable, iommu);
+
+    if (tcet->fd >= 0) {
+        return tcet->liobn;
+    }
+
+    return (uint64_t) -1;
+}
+
 static void spapr_tce_table_do_enable(sPAPRTCETable *tcet);
 static void spapr_tce_table_do_disable(sPAPRTCETable *tcet);
 
@@ -252,6 +263,7 @@ static MemoryRegionIOMMUOps spapr_iommu_ops = {
     .get_page_sizes = spapr_tce_get_page_sizes,
     .vfio_start = spapr_tce_vfio_start,
     .vfio_stop = spapr_tce_vfio_stop,
+    .get_kvm_id = spapr_tce_get_kvm_id,
 };
 
 static int spapr_tce_table_realize(DeviceState *dev)
