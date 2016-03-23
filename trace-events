@@ -1738,6 +1738,8 @@ vfio_region_finalize(const char *name, int index) "Device %s, region %d"
 vfio_region_mmaps_set_enabled(const char *name, bool enabled) "Region %s mmaps enabled: %d"
 vfio_ram_register(uint64_t va, uint64_t size, int ret) "va=%"PRIx64" size=%"PRIx64" ret=%d"
 vfio_ram_unregister(uint64_t va, uint64_t size, int ret) "va=%"PRIx64" size=%"PRIx64" ret=%d"
+vfio_spapr_create_window(int ps, uint64_t ws, uint64_t off) "pageshift=0x%x winsize=0x%"PRIx64" offset=0x%"PRIx64
+vfio_spapr_remove_window(uint64_t off) "offset=%"PRIx64
 
 # hw/vfio/platform.c
 vfio_platform_base_device_init(char *name, int groupid) "%s belongs to group #%d"

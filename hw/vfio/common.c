@@ -279,6 +279,14 @@ static int vfio_host_win_add(VFIOContainer *container,
     return 0;
 }
 
+static void vfio_host_win_del(VFIOContainer *container, hwaddr min_iova)
+{
+    VFIOHostDMAWindow *hostwin = vfio_host_win_lookup(container, min_iova, 1);
+
+    g_assert(hostwin);
+    QLIST_REMOVE(hostwin, hiommu_next);
+}
+
 static bool vfio_listener_skipped_section(MemoryRegionSection *section)
 {
     return (!memory_region_is_ram(section->mr) &&
@@ -391,6 +399,63 @@ static void vfio_listener_region_add(MemoryListener *listener,
         return;
     }
     end = int128_get64(llend);
+
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        unsigned entries, pages, pagesize = qemu_real_host_page_size;
+        struct vfio_iommu_spapr_tce_create create = { .argsz = sizeof(create) };
+
+        trace_vfio_listener_region_add_iommu(iova, end - 1);
+        if (section->mr->iommu_ops) {
+            pagesize = section->mr->iommu_ops->get_page_sizes(section->mr);
+        }
+        /*
+         * FIXME: For VFIO iommu types which have KVM acceleration to
+         * avoid bouncing all map/unmaps through qemu this way, this
+         * would be the right place to wire that up (tell the KVM
+         * device emulation the VFIO iommu handles to use).
+         */
+        create.window_size = int128_get64(section->size);
+        create.page_shift = ctz64(pagesize);
+        /*
+         * SPAPR host supports multilevel TCE tables, there is some
+         * euristic to decide how many levels we want for our table:
+         * 0..64 = 1; 65..4096 = 2; 4097..262144 = 3; 262145.. = 4
+         */
+        entries = create.window_size >> create.page_shift;
+        pages = (entries * sizeof(uint64_t)) / getpagesize();
+        create.levels = ctz64(pow2ceil(pages) - 1) / 6 + 1;
+
+        if (vfio_host_win_lookup(container, create.start_addr,
+                                 create.start_addr + create.window_size - 1)) {
+            goto fail;
+        }
+
+        ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
+        if (ret) {
+            error_report("Failed to create a window, ret = %d (%m)", ret);
+            goto fail;
+        }
+
+        if (create.start_addr != section->offset_within_address_space) {
+            struct vfio_iommu_spapr_tce_remove remove = {
+                .argsz = sizeof(remove),
+                .start_addr = create.start_addr
+            };
+            error_report("Host doesn't support DMA window at %"HWADDR_PRIx", must be %"PRIx64,
+                         section->offset_within_address_space,
+                         create.start_addr);
+            ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
+            ret = -EINVAL;
+            goto fail;
+        }
+        trace_vfio_spapr_create_window(create.page_shift,
+                                       create.window_size,
+                                       create.start_addr);
+
+        vfio_host_win_add(container, create.start_addr,
+                          create.start_addr + create.window_size - 1,
+                          1ULL << create.page_shift);
+    }
 
     if (!vfio_host_win_lookup(container, iova, end - 1)) {
         error_report("vfio: IOMMU container %p can't map guest IOVA region"
@@ -523,6 +588,22 @@ static void vfio_listener_region_del(MemoryListener *listener,
         error_report("vfio_dma_unmap(%p, 0x%"HWADDR_PRIx", "
                      "0x%"HWADDR_PRIx") = %d (%m)",
                      container, iova, end - iova, ret);
+    }
+
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        struct vfio_iommu_spapr_tce_remove remove = {
+            .argsz = sizeof(remove),
+            .start_addr = section->offset_within_address_space,
+        };
+        ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
+        if (ret) {
+            error_report("Failed to remove window at %"PRIx64,
+                         remove.start_addr);
+        }
+
+        vfio_host_win_del(container, section->offset_within_address_space);
+
+        trace_vfio_spapr_remove_window(remove.start_addr);
     }
 
     if (iommu && iommu->iommu_ops && iommu->iommu_ops->vfio_stop) {
@@ -915,11 +996,6 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             }
         }
 
-        /*
-         * This only considers the host IOMMU's 32-bit window.  At
-         * some point we need to add support for the optional 64-bit
-         * window and dynamic windows
-         */
         info.argsz = sizeof(info);
         ret = ioctl(fd, VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
         if (ret) {
@@ -928,11 +1004,30 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto listener_release_exit;
         }
 
-        /* The default table uses 4K pages */
-        vfio_host_win_add(container, info.dma32_window_start,
-                          info.dma32_window_start +
-                          info.dma32_window_size - 1,
-                          0x1000);
+        if (v2) {
+            /*
+             * There is a default window in just created container.
+             * To make region_add/del simpler, we better remove this
+             * window now and let those iommu_listener callbacks
+             * create/remove them when needed.
+             */
+            struct vfio_iommu_spapr_tce_remove remove = {
+                .argsz = sizeof(remove),
+                .start_addr = info.dma32_window_start,
+            };
+            ret = ioctl(fd, VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
+            if (ret) {
+                error_report("vfio: VFIO_IOMMU_SPAPR_TCE_REMOVE failed: %m");
+                ret = -errno;
+                goto free_container_exit;
+            }
+        } else {
+            /* The default table uses 4K pages */
+            vfio_host_win_add(container, info.dma32_window_start,
+                              info.dma32_window_start +
+                              info.dma32_window_size - 1,
+                              0x1000);
+        }
     } else {
         error_report("vfio: No available IOMMU models");
         ret = -EINVAL;
