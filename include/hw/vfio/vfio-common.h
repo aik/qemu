@@ -73,6 +73,8 @@ typedef struct VFIOContainer {
     VFIOAddressSpace *space;
     int fd; /* /dev/vfio/vfio, empowered by the attached groups */
     MemoryListener listener;
+    MemoryListener prereg_listener;
+    unsigned iommu_type;
     int error;
     bool initialized;
     /*
@@ -156,4 +158,6 @@ extern QLIST_HEAD(vfio_as_head, VFIOAddressSpace) vfio_address_spaces;
 int vfio_get_region_info(VFIODevice *vbasedev, int index,
                          struct vfio_region_info **info);
 #endif
+extern const MemoryListener vfio_prereg_listener;
+
 #endif /* !HW_VFIO_VFIO_COMMON_H */
