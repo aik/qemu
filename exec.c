@@ -43,6 +43,7 @@
 #else /* !CONFIG_USER_ONLY */
 #include "sysemu/xen-mapcache.h"
 #include "trace.h"
+#include "sysemu/hostmem.h"
 #endif
 #include "exec/cpu-all.h"
 #include "qemu/rcu_queue.h"
@@ -1231,8 +1232,6 @@ void qemu_mutex_unlock_ramlist(void)
 
 #include <sys/vfs.h>
 
-#define HUGETLBFS_MAGIC       0x958458f6
-
 static long gethugepagesize(const char *path, Error **errp)
 {
     struct statfs fs;
@@ -1249,6 +1248,69 @@ static long gethugepagesize(const char *path, Error **errp)
     }
 
     return fs.f_bsize;
+}
+
+static int find_max_supported_pagesize(Object *obj, void *opaque)
+{
+#if !defined(CONFIG_USER_ONLY)
+    char *mem_path;
+    long *hpsize_min = opaque;
+
+    if (object_dynamic_cast(obj, TYPE_MEMORY_BACKEND)) {
+        mem_path = object_property_get_str(obj, "mem-path", NULL);
+        if (mem_path) {
+            Error *local_err = NULL;
+            long hpsize = gethugepagesize(mem_path, &local_err);
+
+            if (local_err) {
+                error_report_err(local_err);
+            } else if (hpsize < *hpsize_min) {
+                *hpsize_min = hpsize;
+            }
+        } else {
+            *hpsize_min = getpagesize();
+        }
+    }
+
+    return 0;
+#else
+    return 1;
+#endif
+}
+
+long getrampagesize(void)
+{
+    long hpsize = LONG_MAX;
+    Object *memdev_root;
+
+    if (mem_path) {
+        Error *local_err = NULL;
+        long ret = gethugepagesize(mem_path, &local_err);
+        if (local_err) {
+            error_report_err(local_err);
+            return getpagesize();
+        }
+        return ret;
+    }
+
+    /* it's possible we have memory-backend objects with
+     * hugepage-backed RAM. these may get mapped into system
+     * address space via -numa parameters or memory hotplug
+     * hooks. we want to take these into account, but we
+     * also want to make sure these supported hugepage
+     * sizes are applicable across the entire range of memory
+     * we may boot from, so we take the min across all
+     * backends, and assume normal pages in cases where a
+     * backend isn't backed by hugepages.
+     */
+    memdev_root = object_resolve_path("/objects", NULL);
+    if (!memdev_root) {
+        return getpagesize();
+    }
+
+    object_child_foreach(memdev_root, find_max_supported_pagesize, &hpsize);
+
+    return (hpsize == LONG_MAX) ? getpagesize() : hpsize;
 }
 
 static void *file_ram_alloc(RAMBlock *block,
