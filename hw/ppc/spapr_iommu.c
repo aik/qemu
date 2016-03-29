@@ -155,6 +155,16 @@ static uint64_t spapr_tce_get_page_sizes(MemoryRegion *iommu)
     return 1ULL << tcet->page_shift;
 }
 
+static void spapr_tce_vfio_start(MemoryRegion *iommu)
+{
+    spapr_tce_set_need_vfio(container_of(iommu, sPAPRTCETable, iommu), true);
+}
+
+static void spapr_tce_vfio_stop(MemoryRegion *iommu)
+{
+    spapr_tce_set_need_vfio(container_of(iommu, sPAPRTCETable, iommu), false);
+}
+
 static void spapr_tce_table_do_enable(sPAPRTCETable *tcet);
 static void spapr_tce_table_do_disable(sPAPRTCETable *tcet);
 
@@ -239,6 +249,8 @@ static const VMStateDescription vmstate_spapr_tce_table = {
 static MemoryRegionIOMMUOps spapr_iommu_ops = {
     .translate = spapr_tce_translate_iommu,
     .get_page_sizes = spapr_tce_get_page_sizes,
+    .vfio_start = spapr_tce_vfio_start,
+    .vfio_stop = spapr_tce_vfio_stop,
 };
 
 static int spapr_tce_table_realize(DeviceState *dev)
@@ -248,7 +260,7 @@ static int spapr_tce_table_realize(DeviceState *dev)
     char tmp[32];
 
     tcet->fd = -1;
-    tcet->need_vfio = false;
+    tcet->vfio_users = 0;
     snprintf(tmp, sizeof(tmp), "tce-root-%x", tcet->liobn);
     memory_region_init(&tcet->root, tcetobj, tmp, UINT64_MAX);
 
@@ -268,20 +280,18 @@ void spapr_tce_set_need_vfio(sPAPRTCETable *tcet, bool need_vfio)
     size_t table_size = tcet->nb_table * sizeof(uint64_t);
     void *newtable;
 
-    if (need_vfio == tcet->need_vfio) {
-        /* Nothing to do */
-        return;
-    }
+    tcet->vfio_users += need_vfio ? 1 : -1;
+    g_assert(tcet->vfio_users >= 0);
+    g_assert(tcet->table);
 
-    if (!need_vfio) {
+    if (!tcet->vfio_users) {
         /* FIXME: We don't support transition back to KVM accelerated
          * TCEs yet */
         return;
     }
 
-    tcet->need_vfio = true;
-
-    if (tcet->fd < 0) {
+    if (tcet->vfio_users > 1) {
+        g_assert(tcet->fd < 0);
         /* Table is already in userspace, nothing to be do */
         return;
     }
@@ -327,7 +337,7 @@ static void spapr_tce_table_do_enable(sPAPRTCETable *tcet)
                                         tcet->page_shift,
                                         tcet->nb_table,
                                         &tcet->fd,
-                                        tcet->need_vfio);
+                                        tcet->vfio_users != 0);
 
     memory_region_set_size(&tcet->iommu,
                            (uint64_t)tcet->nb_table << tcet->page_shift);

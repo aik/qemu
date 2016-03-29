@@ -548,7 +548,7 @@ struct sPAPRTCETable {
     uint32_t mig_nb_table;
     uint64_t *mig_table;
     bool bypass;
-    bool need_vfio;
+    int vfio_users;
     int fd;
     MemoryRegion root, iommu;
     struct VIOsPAPRDevice *vdev; /* for @bypass migration compatibility only */

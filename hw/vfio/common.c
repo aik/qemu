@@ -421,6 +421,9 @@ static void vfio_listener_region_add(MemoryListener *listener,
         QLIST_INSERT_HEAD(&container->giommu_list, giommu, giommu_next);
 
         memory_region_register_iommu_notifier(giommu->iommu, &giommu->n);
+        if (section->mr->iommu_ops && section->mr->iommu_ops->vfio_start) {
+            section->mr->iommu_ops->vfio_start(section->mr);
+        }
         memory_region_iommu_replay(giommu->iommu, &giommu->n,
                                    false);
 
@@ -466,6 +469,7 @@ static void vfio_listener_region_del(MemoryListener *listener,
     VFIOContainer *container = container_of(listener, VFIOContainer, listener);
     hwaddr iova, end;
     int ret;
+    MemoryRegion *iommu = NULL;
 
     if (vfio_listener_skipped_section(section)) {
         trace_vfio_listener_region_del_skip(
@@ -487,6 +491,7 @@ static void vfio_listener_region_del(MemoryListener *listener,
         QLIST_FOREACH(giommu, &container->giommu_list, giommu_next) {
             if (giommu->iommu == section->mr) {
                 memory_region_unregister_iommu_notifier(&giommu->n);
+                iommu = giommu->iommu;
                 QLIST_REMOVE(giommu, giommu_next);
                 g_free(giommu);
                 break;
@@ -518,6 +523,10 @@ static void vfio_listener_region_del(MemoryListener *listener,
         error_report("vfio_dma_unmap(%p, 0x%"HWADDR_PRIx", "
                      "0x%"HWADDR_PRIx") = %d (%m)",
                      container, iova, end - iova, ret);
+    }
+
+    if (iommu && iommu->iommu_ops && iommu->iommu_ops->vfio_stop) {
+        iommu->iommu_ops->vfio_stop(section->mr);
     }
 }
 
