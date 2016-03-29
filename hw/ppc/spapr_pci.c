@@ -1453,6 +1453,10 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
 
     /* DMA setup */
 
+#ifdef __linux__
+    /* This allows huge pages for IOMMU when guest is backed with huge pages */
+    sphb->page_size_mask |= getrampagesize();
+#endif
     for (i = 0; i < windows_supported; ++i) {
         tcet = spapr_tce_new_table(DEVICE(sphb),
                                    SPAPR_PCI_LIOBN(sphb->index, i));
