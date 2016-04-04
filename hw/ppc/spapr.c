@@ -2362,7 +2362,12 @@ DEFINE_SPAPR_MACHINE(2_6, "2.6", true);
  * pseries-2.5
  */
 #define SPAPR_COMPAT_2_5 \
-        HW_COMPAT_2_5
+        HW_COMPAT_2_5 \
+        {\
+            .driver   = TYPE_SPAPR_PCI_HOST_BRIDGE,\
+            .property = "ddw",\
+            .value    = stringify(off),\
+        },
 
 static void spapr_machine_2_5_instance_options(MachineState *machine)
 {

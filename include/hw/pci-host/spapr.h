@@ -71,6 +71,10 @@ struct sPAPRPHBState {
     spapr_pci_msi_mig *msi_devs;
 
     QLIST_ENTRY(sPAPRPHBState) list;
+
+    bool ddw_enabled;
+    uint64_t page_size_mask;
+    uint64_t dma64_window_addr;
 };
 
 #define SPAPR_PCI_MAX_INDEX          255
@@ -88,6 +92,8 @@ struct sPAPRPHBState {
 #define SPAPR_PCI_IO_WIN_SIZE        0x10000
 
 #define SPAPR_PCI_MSI_WINDOW         0x40000000000ULL
+
+#define SPAPR_PCI_DMA_MAX_WINDOWS    2
 
 static inline qemu_irq spapr_phb_lsi_qirq(struct sPAPRPHBState *phb, int pin)
 {
