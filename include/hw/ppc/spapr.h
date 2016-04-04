@@ -545,6 +545,8 @@ struct sPAPRTCETable {
     uint64_t bus_offset;
     uint32_t page_shift;
     uint64_t *table;
+    uint32_t mig_nb_table;
+    uint64_t *mig_table;
     bool bypass;
     bool need_vfio;
     int fd;
