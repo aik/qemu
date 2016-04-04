@@ -1306,7 +1306,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     if (sphb->index != (uint32_t)-1) {
         hwaddr windows_base;
 
-        if ((sphb->buid != (uint64_t)-1) || (sphb->dma_liobn != (uint32_t)-1)
+        if ((sphb->buid != (uint64_t)-1)
             || (sphb->mem_win_addr != (hwaddr)-1)
             || (sphb->io_win_addr != (hwaddr)-1)) {
             error_setg(errp, "Either \"index\" or other parameters must"
@@ -1321,7 +1321,6 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         }
 
         sphb->buid = SPAPR_PCI_BASE_BUID + sphb->index;
-        sphb->dma_liobn = SPAPR_PCI_LIOBN(sphb->index, 0);
 
         windows_base = SPAPR_PCI_WINDOW_BASE
             + sphb->index * SPAPR_PCI_WINDOW_SPACING;
@@ -1331,11 +1330,6 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
 
     if (sphb->buid == (uint64_t)-1) {
         error_setg(errp, "BUID not specified for PHB");
-        return;
-    }
-
-    if (sphb->dma_liobn == (uint32_t)-1) {
-        error_setg(errp, "LIOBN not specified for PHB");
         return;
     }
 
@@ -1453,7 +1447,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         }
     }
 
-    tcet = spapr_tce_new_table(DEVICE(sphb), sphb->dma_liobn);
+    tcet = spapr_tce_new_table(DEVICE(sphb), SPAPR_PCI_LIOBN(sphb->index, 0));
     if (!tcet) {
         error_setg(errp, "Unable to create TCE table for %s",
                    sphb->dtbusname);
@@ -1479,7 +1473,8 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
 
 void spapr_phb_dma_reset(sPAPRPHBState *sphb)
 {
-    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(sphb->dma_liobn);
+    uint32_t liobn = SPAPR_PCI_LIOBN(sphb->index, 0);
+    sPAPRTCETable *tcet = spapr_tce_find_by_liobn(liobn);
 
     if (tcet && tcet->enabled) {
         spapr_tce_table_disable(tcet);
@@ -1507,7 +1502,7 @@ static void spapr_phb_reset(DeviceState *qdev)
 static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT32("index", sPAPRPHBState, index, -1),
     DEFINE_PROP_UINT64("buid", sPAPRPHBState, buid, -1),
-    DEFINE_PROP_UINT32("liobn", sPAPRPHBState, dma_liobn, -1),
+    DEFINE_PROP_UINT32("liobn", sPAPRPHBState, _dma_liobn, -1),
     DEFINE_PROP_UINT64("mem_win_addr", sPAPRPHBState, mem_win_addr, -1),
     DEFINE_PROP_UINT64("mem_win_size", sPAPRPHBState, mem_win_size,
                        SPAPR_PCI_MMIO_WIN_SIZE),
@@ -1595,7 +1590,7 @@ static const VMStateDescription vmstate_spapr_pci = {
     .post_load = spapr_pci_post_load,
     .fields = (VMStateField[]) {
         VMSTATE_UINT64_EQUAL(buid, sPAPRPHBState),
-        VMSTATE_UINT32_EQUAL(dma_liobn, sPAPRPHBState),
+        VMSTATE_UNUSED(4), /* former dma_liobn */
         VMSTATE_UINT64_EQUAL(mem_win_addr, sPAPRPHBState),
         VMSTATE_UINT64_EQUAL(mem_win_size, sPAPRPHBState),
         VMSTATE_UINT64_EQUAL(io_win_addr, sPAPRPHBState),
