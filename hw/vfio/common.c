@@ -275,6 +275,18 @@ static void vfio_host_win_add(VFIOContainer *container,
     QLIST_INSERT_HEAD(&container->hostwin_list, hostwin, hostwin_next);
 }
 
+static int vfio_host_win_del(VFIOContainer *container, hwaddr min_iova)
+{
+    VFIOHostDMAWindow *hostwin = vfio_host_win_lookup(container, min_iova, 1);
+
+    if (!hostwin) {
+        return -1;
+    }
+    QLIST_REMOVE(hostwin, hostwin_next);
+
+    return 0;
+}
+
 static bool vfio_listener_skipped_section(MemoryRegionSection *section)
 {
     return (!memory_region_is_ram(section->mr) &&
@@ -387,6 +399,30 @@ static void vfio_listener_region_add(MemoryListener *listener,
         return;
     }
     end = int128_get64(int128_sub(llend, int128_one()));
+
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        VFIOHostDMAWindow *hostwin;
+        hwaddr pgsize = 0;
+
+        /* For now intersections are not allowed, we may relax this later */
+        QLIST_FOREACH(hostwin, &container->hostwin_list, hostwin_next) {
+            if (ranges_overlap(hostwin->min_iova,
+                               hostwin->max_iova - hostwin->min_iova + 1,
+                               section->offset_within_address_space,
+                               int128_get64(section->size))) {
+                goto fail;
+            }
+        }
+
+        ret = vfio_spapr_create_window(container, section, &pgsize);
+        if (ret) {
+            goto fail;
+        }
+
+        vfio_host_win_add(container, section->offset_within_address_space,
+                          section->offset_within_address_space +
+                          int128_get64(section->size) - 1, pgsize);
+    }
 
     if (!vfio_host_win_lookup(container, iova, end)) {
         error_report("vfio: IOMMU container %p can't map guest IOVA region"
@@ -522,6 +558,18 @@ static void vfio_listener_region_del(MemoryListener *listener,
         error_report("vfio_dma_unmap(%p, 0x%"HWADDR_PRIx", "
                      "0x%"HWADDR_PRIx") = %d (%m)",
                      container, iova, int128_get64(llsize), ret);
+    }
+
+    if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
+        vfio_spapr_remove_window(container,
+                                 section->offset_within_address_space);
+        if (vfio_host_win_del(container,
+                              section->offset_within_address_space) < 0) {
+            hw_error("%s: Cannot delete missing window at %"HWADDR_PRIx,
+                     __func__, section->offset_within_address_space);
+        }
+
+        trace_vfio_spapr_remove_window(section->offset_within_address_space);
     }
 }
 
@@ -960,11 +1008,6 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             }
         }
 
-        /*
-         * This only considers the host IOMMU's 32-bit window.  At
-         * some point we need to add support for the optional 64-bit
-         * window and dynamic windows
-         */
         info.argsz = sizeof(info);
         ret = ioctl(fd, VFIO_IOMMU_SPAPR_TCE_GET_INFO, &info);
         if (ret) {
@@ -973,11 +1016,24 @@ static int vfio_connect_container(VFIOGroup *group, AddressSpace *as)
             goto listener_release_exit;
         }
 
-        /* The default table uses 4K pages */
-        vfio_host_win_add(container, info.dma32_window_start,
-                          info.dma32_window_start +
-                          info.dma32_window_size - 1,
-                          0x1000);
+        if (v2) {
+            /*
+             * There is a default window in just created container.
+             * To make region_add/del simpler, we better remove this
+             * window now and let those iommu_listener callbacks
+             * create/remove them when needed.
+             */
+            ret = vfio_spapr_remove_window(container, info.dma32_window_start);
+            if (ret) {
+                goto free_container_exit;
+            }
+        } else {
+            /* The default table uses 4K pages */
+            vfio_host_win_add(container, info.dma32_window_start,
+                              info.dma32_window_start +
+                              info.dma32_window_size - 1,
+                              0x1000);
+        }
     } else {
         error_report("vfio: No available IOMMU models");
         ret = -EINVAL;
