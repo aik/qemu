@@ -2366,6 +2366,11 @@ DEFINE_SPAPR_MACHINE(2_6, "2.6", true);
         .driver   = "spapr-vlan", \
         .property = "use-rx-buffer-pools", \
         .value    = "off", \
+    }, \
+    {\
+        .driver   = TYPE_SPAPR_PCI_HOST_BRIDGE,\
+        .property = "ddw",\
+        .value    = stringify(off),\
     },
 
 static void spapr_machine_2_5_instance_options(MachineState *machine)
