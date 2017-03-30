@@ -1099,6 +1099,7 @@ static void memory_region_initfn(Object *obj)
                         memory_region_get_size,
                         NULL, /* memory_region_set_size, */
                         NULL, NULL, &error_abort);
+    //printf("+++Q+++ (%u) %s %u :%p\n", getpid(), __func__, __LINE__, obj);
 }
 
 static void iommu_memory_region_initfn(Object *obj)
@@ -1516,6 +1517,9 @@ void memory_region_init_iommu(void *_iommu_mr,
 {
     struct IOMMUMemoryRegion *iommu_mr;
     struct MemoryRegion *mr;
+
+    printf("+++Q+++ (%u) %s %u: %s == %ld\n", getpid(), __func__, __LINE__,
+            mrtypename, instance_size);
 
     object_initialize(_iommu_mr, instance_size, mrtypename);
     mr = MEMORY_REGION(_iommu_mr);

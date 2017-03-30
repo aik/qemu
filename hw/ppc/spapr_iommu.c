@@ -287,9 +287,11 @@ void spapr_tce_set_need_vfio(sPAPRTCETable *tcet, bool need_vfio)
 
     g_assert(need_vfio != tcet->need_vfio);
 
+    printf("+++Q+++ (%u) %s %u: %d -> %d\n", getpid(), __func__, __LINE__, tcet->need_vfio, need_vfio);
     tcet->need_vfio = need_vfio;
 
     if (!need_vfio || (tcet->fd != -1 && kvmppc_has_cap_spapr_vfio())) {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         return;
     }
 
@@ -304,6 +306,7 @@ void spapr_tce_set_need_vfio(sPAPRTCETable *tcet, bool need_vfio)
     memcpy(tcet->table, oldtable, table_size);
 
     spapr_tce_free_table(oldtable, tcet->fd, tcet->nb_table);
+    printf("+++Q+++ (%u) %s %u: %d -> %d\n", getpid(), __func__, __LINE__, newfd, tcet->fd);
 
     tcet->fd = newfd;
 }
@@ -366,6 +369,7 @@ void spapr_tce_table_disable(sPAPRTCETable *tcet)
 
     spapr_tce_free_table(tcet->table, tcet->fd, tcet->nb_table);
     tcet->fd = -1;
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     tcet->table = NULL;
     tcet->bus_offset = 0;
     tcet->page_shift = 0;

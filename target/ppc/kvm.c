@@ -2206,12 +2206,16 @@ int kvmppc_spapr_enable_inkernel_multitce(void)
 {
     int ret;
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     ret = kvm_vm_enable_cap(kvm_state, KVM_CAP_PPC_ENABLE_HCALL, 0,
                             H_PUT_TCE_INDIRECT, 1);
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     if (!ret) {
         ret = kvm_vm_enable_cap(kvm_state, KVM_CAP_PPC_ENABLE_HCALL, 0,
                                 H_STUFF_TCE, 1);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     }
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     return ret;
 }
@@ -2266,6 +2270,7 @@ void *kvmppc_create_spapr_tce(uint32_t liobn, uint32_t page_shift,
         return NULL;
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     len = nb_table * sizeof(uint64_t);
     /* FIXME: round this up to page size */
 
@@ -2296,6 +2301,7 @@ int kvmppc_remove_spapr_tce(void *table, int fd, uint32_t nb_table)
                 strerror(errno));
         /* Leak the table */
     }
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     return 0;
 }

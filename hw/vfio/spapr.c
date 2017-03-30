@@ -216,6 +216,7 @@ int vfio_spapr_notify_kvm(int vfio_kvm_device_fd, int groupfd,
     param.tablefd = simrc->get_fd(spapr_iommu_mr);
 
     if (param.tablefd != -1) {
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
             error_report("vfio: failed to setup fd %d for a group with fd %d: %s",
                          param.tablefd, param.groupfd, strerror(errno));
@@ -235,6 +236,25 @@ int vfio_spapr_remove_window(VFIOContainer *container,
         .start_addr = offset_within_address_space,
     };
     int ret;
+
+#if 0//def CONFIG_KVM
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+    if (kvm_enabled() && section && section->mr->iommu_ops->get_fd) {
+        int fd = section->mr->iommu_ops->get_fd(section->mr);
+        struct kvm_spapr_tce_vfio param = {
+            .argsz = sizeof(param),
+            .flags = 0,
+            .container_fd = container->fd,
+        };
+
+        printf("+++Q+++ (%u) %s %u UNSET\n", getpid(), __func__, __LINE__);
+        if (ioctl(fd, KVM_SPAPR_TCE_VFIO_UNSET, &param)) {
+            error_report("vfio: failed to setup fd %d for a group: %s",
+                         fd, strerror(errno));
+        }
+    }
+#endif
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
     ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_REMOVE, &remove);
     if (ret) {

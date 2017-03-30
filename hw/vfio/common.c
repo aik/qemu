@@ -434,6 +434,7 @@ static void vfio_listener_region_add(MemoryListener *listener,
     }
     end = int128_get64(int128_sub(llend, int128_one()));
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     if (container->iommu_type == VFIO_SPAPR_TCE_v2_IOMMU) {
         VFIOHostDMAWindow *hostwin;
         hwaddr pgsize = 0;
@@ -457,6 +458,8 @@ static void vfio_listener_region_add(MemoryListener *listener,
 #ifdef CONFIG_KVM
         if (kvm_enabled()) {
             VFIOGroup *group;
+
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
 
             QLIST_FOREACH(group, &container->group_list, container_next) {
                 vfio_spapr_notify_kvm(vfio_kvm_device_fd, group->fd,
@@ -1162,8 +1165,17 @@ put_space_exit:
 static void vfio_disconnect_container(VFIOGroup *group)
 {
     VFIOContainer *container = group->container;
+    int ret = -1, retries;
 
-    if (ioctl(group->fd, VFIO_GROUP_UNSET_CONTAINER, &container->fd)) {
+    for (retries = 0; (retries < 5) && ret; ++retries) {
+        ret = ioctl(group->fd, VFIO_GROUP_UNSET_CONTAINER, &container->fd);
+        if (ret) {
+            usleep(100000);
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+        }
+    }
+
+    if (ret) {
         error_report("vfio: error disconnecting group %d from container",
                      group->groupid);
     }
