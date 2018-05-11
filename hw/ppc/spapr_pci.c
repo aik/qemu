@@ -1582,7 +1582,8 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         smc->phb_placement(spapr, sphb->index,
                            &sphb->buid, &sphb->io_win_addr,
                            &sphb->mem_win_addr, &sphb->mem64_win_addr,
-                           windows_supported, sphb->dma_liobn, &local_err);
+                           windows_supported, sphb->dma_liobn, &sphb->nv2_gpa,
+                           &local_err);
         if (local_err) {
             error_propagate(errp, local_err);
             return;
