@@ -1256,6 +1256,8 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
     uint32_t drc_index = spapr_phb_get_pci_drc_index(sphb, dev);
     uint32_t ccode = pci_default_read_config(dev, PCI_CLASS_PROG, 3);
     uint32_t max_msi, max_msix;
+    uint16_t vid = pci_default_read_config(dev, PCI_VENDOR_ID, 2);
+    uint16_t devid = pci_default_read_config(dev, PCI_DEVICE_ID, 2);
 
     if (pci_default_read_config(dev, PCI_HEADER_TYPE, 1) ==
         PCI_HEADER_TYPE_BRIDGE) {
@@ -1263,10 +1265,8 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
     }
 
     /* in accordance with PAPR+ v2.7 13.6.3, Table 181 */
-    _FDT(fdt_setprop_cell(fdt, offset, "vendor-id",
-                          pci_default_read_config(dev, PCI_VENDOR_ID, 2)));
-    _FDT(fdt_setprop_cell(fdt, offset, "device-id",
-                          pci_default_read_config(dev, PCI_DEVICE_ID, 2)));
+    _FDT(fdt_setprop_cell(fdt, offset, "vendor-id", vid));
+    _FDT(fdt_setprop_cell(fdt, offset, "device-id", devid));
     _FDT(fdt_setprop_cell(fdt, offset, "revision-id",
                           pci_default_read_config(dev, PCI_REVISION_ID, 1)));
     _FDT(fdt_setprop_cell(fdt, offset, "class-code", ccode));
@@ -1348,6 +1348,40 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
 
     if (sphb->pcie_ecs && pci_is_express(dev)) {
         _FDT(fdt_setprop_cell(fdt, offset, "ibm,pci-config-space-type", 0x1));
+    }
+
+    /* NVIDIA GPU */
+    if (vid == PCI_VENDOR_ID_NVIDIA && devid == 0x1db1) {
+        uint32_t npus[ARRAY_SIZE(sphb->__npus)];
+        int n;
+
+        for (n = 0; n < ARRAY_SIZE(npus); ++n) {
+            char *buf = g_strdup_printf("ibm,npu#%d", n);
+            Object *npu = object_property_get_link(OBJECT(sphb), buf, NULL);
+
+            if (!npu) {
+                break;
+            }
+            npus[n] = cpu_to_be32(PHANDLE_NPU(sphb, PCI_DEVICE(npu)));
+            g_free(buf);
+        }
+
+        if (n) {
+            _FDT(fdt_setprop(fdt, offset, "ibm,npu", npus, n * sizeof(npus[0])));
+            _FDT((fdt_setprop_cell(fdt, offset, "phandle", PHANDLE_GPU(sphb))));
+        }
+    }
+
+    /* IBM NPU */
+    if (vid == PCI_VENDOR_ID_IBM && devid == 0x04ea) {
+        Object *gpu_obj = object_property_get_link(OBJECT(sphb), "ibm,gpu",
+                                                   NULL);
+
+        if (gpu_obj) {
+            _FDT(fdt_setprop_cell(fdt, offset, "ibm,gpu", PHANDLE_GPU(sphb)));
+            _FDT((fdt_setprop_cell(fdt, offset, "phandle",
+                                   PHANDLE_NPU(sphb, dev))));
+        }
     }
 }
 
@@ -2078,6 +2112,70 @@ static void spapr_phb_pci_enumerate(sPAPRPHBState *phb)
 
 }
 
+static void spapr_phb_pci_bus_enumerate_nvlink(PCIBus *bus, PCIDevice *pdev,
+                                                void *opaque)
+{
+    sPAPRPHBState *sphb = opaque;
+    PCIBus *sec_bus;
+    uint16_t vid = pci_default_read_config(pdev, PCI_VENDOR_ID, 2);
+    uint16_t devid = pci_default_read_config(pdev, PCI_DEVICE_ID, 2);
+
+    /* NVIDIA GPU */
+    if (vid == PCI_VENDOR_ID_NVIDIA && devid == 0x1db1) {
+        sphb->__gpu = pdev;
+        object_property_add_link(OBJECT(sphb), "ibm,gpu", TYPE_PCI_DEVICE,
+                                 (Object **)&sphb->__gpu,
+                                 object_property_allow_set_link,
+                                 OBJ_PROP_LINK_STRONG,
+                                 &error_abort);
+    }
+
+    /* IBM NPU */
+    if (vid == PCI_VENDOR_ID_IBM && devid == 0x04ea) {
+        int n = 0;
+
+        for (n = 0; n < ARRAY_SIZE(sphb->__npus); ++n) {
+            char *buf = g_strdup_printf("ibm,npu#%d", n);
+
+            if (object_property_get_link(OBJECT(sphb), buf, NULL)) {
+                g_free(buf);
+                continue;
+            }
+
+            sphb->__npus[n] = pdev;
+            object_property_add_link(OBJECT(sphb), buf, TYPE_PCI_DEVICE,
+                                     (Object **)&sphb->__npus[n],
+                                     object_property_allow_set_link,
+                                     OBJ_PROP_LINK_STRONG,
+                                     &error_abort);
+            g_free(buf);
+            break;
+        }
+    }
+
+    if ((pci_default_read_config(pdev, PCI_HEADER_TYPE, 1) !=
+         PCI_HEADER_TYPE_BRIDGE)) {
+        return;
+    }
+
+    sec_bus = pci_bridge_get_sec_bus(PCI_BRIDGE(pdev));
+    if (!sec_bus) {
+        return;
+    }
+
+    pci_for_each_device(sec_bus, pci_bus_num(sec_bus),
+                        spapr_phb_pci_bus_enumerate_nvlink, opaque);
+}
+
+static void spapr_phb_pci_enumerate_nvlink(sPAPRPHBState *phb)
+{
+    PCIBus *bus = PCI_HOST_BRIDGE(phb)->bus;
+
+    pci_for_each_device(bus, pci_bus_num(bus),
+                        spapr_phb_pci_bus_enumerate_nvlink, phb);
+
+}
+
 int spapr_populate_pci_dt(sPAPRPHBState *phb,
                           uint32_t xics_phandle,
                           void *fdt)
@@ -2197,6 +2295,8 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     /* Walk the bridges and program the bus numbers*/
     spapr_phb_pci_enumerate(phb);
     _FDT(fdt_setprop_cell(fdt, bus_off, "qemu,phb-enumerated", 0x1));
+
+    spapr_phb_pci_enumerate_nvlink(phb);
 
     /* Populate tree nodes with PCI devices attached */
     s_fdt.fdt = fdt;

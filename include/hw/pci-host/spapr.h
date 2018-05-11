@@ -89,6 +89,8 @@ struct sPAPRPHBState {
     hwaddr mig_mem_win_addr, mig_mem_win_size;
     hwaddr mig_io_win_addr, mig_io_win_size;
     hwaddr nv2_gpa;
+
+    PCIDevice *__gpu, *__npus[2]; /* just storage for QOM links */
 };
 
 #define SPAPR_PCI_MEM_WIN_BUS_OFFSET 0x80000000ULL
@@ -106,6 +108,9 @@ struct sPAPRPHBState {
 
 #define SPAPR_PCI_MSI_WINDOW         0x40000000000ULL
 
+#define PHANDLE_GPU(phb)             (0x00110000 | (((phb)->index) << 8))
+#define PHANDLE_NPU(phb, pdev)       (0x00120000 | \
+                                     (((phb)->index) << 8) | ((pdev)->devfn))
 #define SPAPR_PCI_NV2RAM64_WIN_BASE  0x10000000000ULL /* 1 TiB */
 #define SPAPR_PCI_NV2RAM64_WIN_SIZE  0x10000000000ULL /* 1 TiB */
 
