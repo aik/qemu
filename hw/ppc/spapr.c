@@ -964,6 +964,13 @@ int spapr_h_cas_compose_response(SpaprMachineState *spapr,
     spapr->fdt_initial_size = spapr->fdt_size;
     spapr->fdt_blob = fdt;
 
+    {
+        FILE *f = fopen("my.cas.dtb", "wb");
+        fwrite(spapr->fdt_blob, spapr->fdt_size, 1, f);
+        fclose(f);
+        printf("+++Q+++ (%u) %s %u: my.cas.dtb\n", getpid(), __func__, __LINE__);
+    }
+
     return 0;
 }
 
@@ -1758,6 +1765,13 @@ static void spapr_machine_reset(MachineState *machine)
     first_ppc_cpu->env.gpr[5] = 0;
 
     spapr->cas_reboot = false;
+
+    {
+        FILE *f = fopen("my.reset.dtb", "wb");
+        fwrite(fdt, fdt_totalsize(fdt), 1, f);
+        fclose(f);
+        printf("+++Q+++ (%u) %s %u: my.reset.dtb\n", getpid(), __func__, __LINE__);
+    }
 }
 
 static void spapr_create_nvram(SpaprMachineState *spapr)

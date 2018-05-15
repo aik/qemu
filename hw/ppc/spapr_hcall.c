@@ -1956,6 +1956,13 @@ static target_ulong h_update_dt(PowerPCCPU *cpu, SpaprMachineState *spapr,
     g_free(spapr->fdt_blob);
     spapr->fdt_size = cb;
     spapr->fdt_blob = fdt;
+    {
+        FILE *f = fopen("my.slof.dtb", "wb");
+        fwrite(spapr->fdt_blob, spapr->fdt_size, 1, f);
+        fclose(f);
+        printf("+++Q+++ (%u) %s %u: my.slof.dtb\n", getpid(), __func__, __LINE__);
+    }
+
     trace_spapr_update_dt(cb);
 
     return H_SUCCESS;
