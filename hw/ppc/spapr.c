@@ -1633,6 +1633,13 @@ static void spapr_machine_reset(void)
     /* Load the fdt */
     qemu_fdt_dumpdtb(fdt, fdt_totalsize(fdt));
     cpu_physical_memory_write(fdt_addr, fdt, fdt_totalsize(fdt));
+
+    {
+        FILE *f = fopen("my.dtb", "wb");
+        fwrite(fdt, fdt_totalsize(fdt), 1, f);
+        fclose(f);
+    }
+
     g_free(spapr->fdt_blob);
     spapr->fdt_size = fdt_totalsize(fdt);
     spapr->fdt_initial_size = spapr->fdt_size;

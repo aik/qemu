@@ -1746,6 +1746,13 @@ static target_ulong h_update_dt(PowerPCCPU *cpu, sPAPRMachineState *spapr,
     spapr->fdt_blob = g_malloc0(cb);
     cpu_physical_memory_read(dt, spapr->fdt_blob, cb);
 
+    {
+        FILE *f = fopen("my.slof.dtb", "wb");
+        fwrite(spapr->fdt_blob, spapr->fdt_size, 1, f);
+        fclose(f);
+    }
+
+
     trace_spapr_update_dt(cb);
 
     return H_SUCCESS;
