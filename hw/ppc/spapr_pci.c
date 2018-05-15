@@ -1873,6 +1873,7 @@ static Property spapr_phb_properties[] = {
                      pcie_ecs, true),
     DEFINE_PROP_UINT32("ddw-windows", sPAPRPHBState, ddw_windows_supported,
                        SPAPR_PCI_DMA_MAX_WINDOWS),
+    DEFINE_PROP_UINT32("max-dma-window", sPAPRPHBState, max_dma_window_size, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 

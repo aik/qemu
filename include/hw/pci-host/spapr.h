@@ -77,6 +77,7 @@ struct sPAPRPHBState {
     bool ddw_enabled;
     uint64_t page_size_mask;
     uint64_t dma64_win_addr;
+    uint32_t max_dma_window_size;
     uint32_t ddw_windows_supported;
 
     uint32_t numa_node;
