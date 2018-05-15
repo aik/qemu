@@ -1756,6 +1756,12 @@ static target_ulong h_update_dt(PowerPCCPU *cpu, sPAPRMachineState *spapr,
     g_free(spapr->fdt_blob);
     spapr->fdt_size = cb;
     spapr->fdt_blob = fdt;
+    {
+        FILE *f = fopen("my.slof.dtb", "wb");
+        fwrite(spapr->fdt_blob, spapr->fdt_size, 1, f);
+        fclose(f);
+    }
+
     trace_spapr_update_dt(cb);
 
     return H_SUCCESS;
