@@ -96,7 +96,7 @@ static void rtas_ibm_query_pe_dma_window(PowerPCCPU *cpu,
                                          uint32_t nret, target_ulong rets)
 {
     sPAPRPHBState *sphb;
-    uint64_t buid, max_window_size;
+    uint64_t buid, max_tces;
     uint32_t avail, addr, pgmask = 0;
     MachineState *machine = MACHINE(spapr);
 
@@ -119,22 +119,25 @@ static void rtas_ibm_query_pe_dma_window(PowerPCCPU *cpu,
      * for (that is, are reserved for) this PE".
      * Return the maximum number as maximum supported RAM size was in 4K pages.
      */
-    if (machine->ram_size == machine->maxram_size) {
-        max_window_size = machine->ram_size;
+    if (sphb->max_dma_window_size) {
+        max_tces = sphb->max_dma_window_size;
+    } else if (machine->ram_size == machine->maxram_size) {
+        max_tces = machine->ram_size >> SPAPR_TCE_PAGE_SHIFT;
     } else {
-        max_window_size = machine->device_memory->base +
-                          memory_region_size(&machine->device_memory->mr);
+        max_tces = (machine->device_memory->base +
+                          memory_region_size(&machine->device_memory->mr)) >>
+                          SPAPR_TCE_PAGE_SHIFT;
     }
 
     avail = sphb->ddw_windows_supported - spapr_phb_get_active_win_num(sphb);
 
     rtas_st(rets, 0, RTAS_OUT_SUCCESS);
     rtas_st(rets, 1, avail);
-    rtas_st(rets, 2, max_window_size >> SPAPR_TCE_PAGE_SHIFT);
+    rtas_st(rets, 2, max_tces);
     rtas_st(rets, 3, pgmask);
     rtas_st(rets, 4, 0); /* DMA migration mask, not supported */
 
-    trace_spapr_iommu_ddw_query(buid, addr, avail, max_window_size, pgmask);
+    trace_spapr_iommu_ddw_query(buid, addr, avail, max_tces, pgmask);
     return;
 
 param_error_exit:
