@@ -1569,7 +1569,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
     uint64_t msi_window_size = 4096;
     sPAPRTCETable *tcet;
     const unsigned windows_supported =
-        sphb->ddw_enabled ? SPAPR_PCI_DMA_MAX_WINDOWS : 1;
+        sphb->ddw_enabled ? sphb->ddw_windows_supported : 1;
 
     if (!spapr) {
         error_setg(errp, TYPE_SPAPR_PCI_HOST_BRIDGE " needs a pseries machine");
@@ -1589,6 +1589,12 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
         }
     } else {
         error_setg(errp, "\"index\" for PAPR PHB is mandatory");
+        return;
+    }
+
+    if (sphb->ddw_windows_supported > SPAPR_PCI_DMA_MAX_WINDOWS) {
+        error_setg(errp, "Requested %d windows but only %d supported",
+                   sphb->ddw_windows_supported, SPAPR_PCI_DMA_MAX_WINDOWS);
         return;
     }
 
@@ -1779,7 +1785,7 @@ void spapr_phb_dma_reset(sPAPRPHBState *sphb)
     int i;
     sPAPRTCETable *tcet;
 
-    for (i = 0; i < SPAPR_PCI_DMA_MAX_WINDOWS; ++i) {
+    for (i = 0; i < sphb->ddw_windows_supported; ++i) {
         tcet = spapr_tce_find_by_liobn(sphb->dma_liobn[i]);
 
         if (tcet && tcet->nb_table) {
@@ -1830,6 +1836,8 @@ static Property spapr_phb_properties[] = {
                      pre_2_8_migration, false),
     DEFINE_PROP_BOOL("pcie-extended-configuration-space", sPAPRPHBState,
                      pcie_ecs, true),
+    DEFINE_PROP_UINT32("ddw-windows", sPAPRPHBState, ddw_windows_supported,
+                       SPAPR_PCI_DMA_MAX_WINDOWS),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -2143,8 +2151,8 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
 
     /* Dynamic DMA window */
     if (phb->ddw_enabled) {
-        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable", &ddw_applicable,
-                         sizeof(ddw_applicable)));
+        _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-applicable",
+                         &ddw_applicable, sizeof(ddw_applicable)));
         _FDT(fdt_setprop(fdt, bus_off, "ibm,ddw-extensions",
                          &ddw_extensions, sizeof(ddw_extensions)));
     }

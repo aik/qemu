@@ -126,7 +126,7 @@ static void rtas_ibm_query_pe_dma_window(PowerPCCPU *cpu,
                           memory_region_size(&machine->device_memory->mr);
     }
 
-    avail = SPAPR_PCI_DMA_MAX_WINDOWS - spapr_phb_get_active_win_num(sphb);
+    avail = sphb->ddw_windows_supported - spapr_phb_get_active_win_num(sphb);
 
     rtas_st(rets, 0, RTAS_OUT_SUCCESS);
     rtas_st(rets, 1, avail);
@@ -174,7 +174,8 @@ static void rtas_ibm_create_pe_dma_window(PowerPCCPU *cpu,
         goto param_error_exit;
     }
 
-    if (!liobn || !sphb->ddw_enabled || windows == SPAPR_PCI_DMA_MAX_WINDOWS) {
+    if (!liobn || !sphb->ddw_enabled ||
+        windows == sphb->ddw_windows_supported) {
         goto hw_error_exit;
     }
 
