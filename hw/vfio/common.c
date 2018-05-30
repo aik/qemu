@@ -535,7 +535,7 @@ static void vfio_listener_region_add(MemoryListener *listener,
         QLIST_INSERT_HEAD(&container->giommu_list, giommu, giommu_next);
 
         memory_region_register_iommu_notifier(section->mr, &giommu->n);
-        memory_region_iommu_replay(giommu->iommu, &giommu->n);
+        //memory_region_iommu_replay(giommu->iommu, &giommu->n);
 
         return;
     }
