@@ -183,12 +183,15 @@ int vfio_spapr_create_window(VFIOContainer *container,
     entries = create.window_size >> create.page_shift;
     pages = MAX((entries * sizeof(uint64_t)) / getpagesize(), 1);
     pages = MAX(pow2ceil(pages), 1); /* Round up */
-    create.levels = ctz64(pages) / 6 + 1;
+    create.levels = MAX(1, (55 - create.page_shift) / 13);
 
-    ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
-    if (ret) {
-        error_report("Failed to create a window, ret = %d (%m)", ret);
-        return -errno;
+    for (create.levels = MAX(1, (55 - create.page_shift) / 13);
+         create.levels; --create.levels) {
+        ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
+        if (ret) {
+            error_report("Failed to create a window, ret = %d (%m)", ret);
+            return -errno;
+        }
     }
 
     if (create.start_addr != section->offset_within_address_space) {
@@ -200,6 +203,7 @@ int vfio_spapr_create_window(VFIOContainer *container,
         return -EINVAL;
     }
     trace_vfio_spapr_create_window(create.page_shift,
+                                   create.levels,
                                    create.window_size,
                                    create.start_addr);
     *pgsize = pagesize;
