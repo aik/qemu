@@ -2180,3 +2180,35 @@ int vfio_add_virt_caps(VFIOPCIDevice *vdev, Error **errp)
 
     return 0;
 }
+
+int vfio_pci_nvlink2_ram_init(VFIOPCIDevice *vdev, Error **errp)
+{
+    int ret;
+    void *p;
+    struct vfio_region_info *nv2region = NULL;
+    MemoryRegion *nv2mr = g_malloc0(sizeof(*nv2mr));
+
+    ret = vfio_get_dev_region_info(&vdev->vbasedev,
+                                   VFIO_REGION_TYPE_PCI_VENDOR_TYPE |
+                                   PCI_VENDOR_ID_NVIDIA,
+                                   VFIO_REGION_SUBTYPE_NVIDIA_NVLINK2_RAM,
+                                   &nv2region);
+    if (ret) {
+        return ret;
+    }
+
+    p = mmap(NULL, nv2region->size, PROT_READ | PROT_WRITE | PROT_EXEC,
+             MAP_SHARED, vdev->vbasedev.fd, nv2region->offset);
+
+    if (!p) {
+        return -errno;
+    }
+
+    memory_region_init_ram_ptr(nv2mr, OBJECT(vdev), "nvlink2-mr",
+                               nv2region->size, p);
+
+    trace_vfio_pci_nvlink2_ram_setup_quirk(vdev->vbasedev.name,
+                                           nv2region->size);
+
+    return 0;
+}

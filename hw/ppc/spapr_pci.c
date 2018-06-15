@@ -1378,9 +1378,34 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
                                                    NULL);
 
         if (gpu_obj) {
+            Object *nvlink2_mrobj = object_property_get_link(gpu_obj,
+                                                             "nvlink2-mr[0]",
+                                                             NULL);
+
             _FDT(fdt_setprop_cell(fdt, offset, "ibm,gpu", PHANDLE_GPU(sphb)));
             _FDT((fdt_setprop_cell(fdt, offset, "phandle",
                                    PHANDLE_NPU(sphb, dev))));
+
+            if (nvlink2_mrobj) {
+                uint64_t gta;
+                uint32_t tgt[2];
+
+                /* Some encoding defined by NVIDIA to same some bits on PCI */
+                gta  = ((sphb->nv2_gpa >> 42) & 0x1) << 42;
+                gta |= ((sphb->nv2_gpa >> 45) & 0x3) << 43;
+                gta |= ((sphb->nv2_gpa >> 49) & 0x3) << 45;
+                gta |= sphb->nv2_gpa & ((1UL << 43) - 1);
+
+                tgt[0] = cpu_to_be32(gta >> 32);
+                tgt[1] = cpu_to_be32(gta & 0xffffffff);
+
+                _FDT(fdt_setprop_cell(fdt, offset, "memory-region",
+                                      PHANDLE_GPURAM(sphb)));
+                _FDT(fdt_setprop(fdt, offset, "ibm,device-tgt-addr", tgt,
+                                 sizeof(tgt)));
+                /* _FDT(fdt_setprop_cell(fdt, offset, "ibm,nvlink", 0x164)); */
+                _FDT(fdt_setprop_cell(fdt, offset, "ibm,nvlink-speed", 9));
+            }
         }
     }
 }
@@ -1874,6 +1899,7 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_UINT32("ddw-windows", sPAPRPHBState, ddw_windows_supported,
                        SPAPR_PCI_DMA_MAX_WINDOWS),
     DEFINE_PROP_UINT32("max-dma-window", sPAPRPHBState, max_dma_window_size, 0),
+    DEFINE_PROP_UINT64("gpa", sPAPRPHBState, nv2_gpa, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -2311,6 +2337,46 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
                                 SPAPR_DR_CONNECTOR_TYPE_PCI);
     if (ret) {
         return ret;
+    }
+
+    /* If spapr_phb_pci_enumerate_nvlink found GPU, add MR now */
+    if (phb->__gpu) {
+        Object *nvlink2_mrobj = object_property_get_link(OBJECT(phb->__gpu),
+                                                         "nvlink2-mr[0]", NULL);
+        if (nvlink2_mrobj) {
+            char *mem_name;
+            int off;
+            /* For some reason NVLink2 wants a separate NUMA node for its RAM */
+            uint32_t at = cpu_to_be32(GPURAM_ASSOCIATIVITY(phb));
+            uint32_t associativity[] = { cpu_to_be32(0x4), at, at, at, at };
+            uint64_t nv2_size = object_property_get_uint(nvlink2_mrobj,
+                                                         "size", NULL);
+            uint64_t mem_reg_property[2] = {
+                cpu_to_be64(phb->nv2_gpa), cpu_to_be64(nv2_size) };
+            MemoryRegion *mr = MEMORY_REGION(nvlink2_mrobj);
+
+            mem_name = g_strdup_printf("memory@" TARGET_FMT_lx, phb->nv2_gpa);
+            off = fdt_add_subnode(fdt, 0, mem_name);
+            _FDT(off);
+            _FDT((fdt_setprop_string(fdt, off, "device_type", "memory")));
+            _FDT((fdt_setprop(fdt, off, "reg", mem_reg_property,
+                              sizeof(mem_reg_property))));
+            _FDT((fdt_setprop(fdt, off, "ibm,associativity", associativity,
+                              sizeof(associativity))));
+
+            _FDT((fdt_setprop_string(fdt, off, "compatible",
+                                     "ibm,coherent-device-memory")));
+            mem_reg_property[1] = 0;
+            _FDT((fdt_setprop(fdt, off, "linux,usable-memory", mem_reg_property,
+                              sizeof(mem_reg_property))));
+            /*_FDT((fdt_setprop_cell(fdt, off, "ibm,chip-id", phb->index))); */
+            _FDT((fdt_setprop_cell(fdt, off, "phandle", PHANDLE_GPURAM(phb))));
+
+            if (!memory_region_is_mapped(mr)) {
+                memory_region_add_subregion(get_system_memory(), phb->nv2_gpa,
+                                            mr);
+            }
+        }
     }
 
     return 0;

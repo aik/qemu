@@ -3068,6 +3068,13 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         }
     }
 
+    if (vdev->vendor_id == PCI_VENDOR_ID_NVIDIA && vdev->device_id == 0x1db1) {
+        ret = vfio_pci_nvlink2_ram_init(vdev, errp);
+        if (ret) {
+            error_report("Failed to setup GPU RAM");
+        }
+    }
+
     vfio_register_err_notifier(vdev);
     vfio_register_req_notifier(vdev);
     vfio_setup_resetfn_quirk(vdev);
