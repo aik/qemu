@@ -112,6 +112,8 @@ struct sPAPRPHBState {
 #define PHANDLE_GPU(phb)             (0x00110000 | (((phb)->index) << 8))
 #define PHANDLE_NPU(phb, pdev)       (0x00120000 | \
                                      (((phb)->index) << 8) | ((pdev)->devfn))
+#define PHANDLE_GPURAM(phb)          (0x001100FF | (((phb)->index) << 8))
+#define GPURAM_ASSOCIATIVITY(phb)    (0xf0 | (phb)->index)
 #define SPAPR_PCI_NV2RAM64_WIN_BASE  0x10000000000ULL /* 1 TiB */
 #define SPAPR_PCI_NV2RAM64_WIN_SIZE  0x10000000000ULL /* 1 TiB */
 

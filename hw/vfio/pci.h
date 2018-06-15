@@ -193,6 +193,7 @@ int vfio_populate_vga(VFIOPCIDevice *vdev, Error **errp);
 int vfio_pci_igd_opregion_init(VFIOPCIDevice *vdev,
                                struct vfio_region_info *info,
                                Error **errp);
+int vfio_pci_nvlink2_ram_init(VFIOPCIDevice *vdev, Error **errp);
 
 void vfio_display_reset(VFIOPCIDevice *vdev);
 int vfio_display_probe(VFIOPCIDevice *vdev, Error **errp);
