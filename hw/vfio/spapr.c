@@ -188,10 +188,13 @@ int vfio_spapr_create_window(VFIOContainer *container,
     for (create.levels = MAX(1, (55 - create.page_shift) / 13);
          create.levels; --create.levels) {
         ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
-        if (ret) {
-            error_report("Failed to create a window, ret = %d (%m)", ret);
-            return -errno;
+        if (!ret) {
+            break;
         }
+    }
+    if (ret) {
+        error_report("Failed to create a window, ret = %d (%m)", ret);
+        return -errno;
     }
 
     if (create.start_addr != section->offset_within_address_space) {
