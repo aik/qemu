@@ -3206,6 +3206,8 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_BOOL("x-no-kvm-msix", VFIOPCIDevice, no_kvm_msix, false),
     DEFINE_PROP_BOOL("x-no-geforce-quirks", VFIOPCIDevice,
                      no_geforce_quirks, false),
+    DEFINE_PROP_BOOL("x-no-tesla-v100-quirks", VFIOPCIDevice,
+                     no_tesla_v100_quirks, false),
     DEFINE_PROP_BOOL("x-no-kvm-ioeventfd", VFIOPCIDevice, no_kvm_ioeventfd,
                      false),
     DEFINE_PROP_BOOL("x-no-vfio-ioeventfd", VFIOPCIDevice, no_vfio_ioeventfd,
