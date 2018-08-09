@@ -75,6 +75,7 @@ struct sPAPRPHBState {
     QLIST_ENTRY(sPAPRPHBState) list;
 
     bool ddw_enabled;
+    bool ddw_kill_default;
     uint64_t page_size_mask;
     uint64_t dma64_win_addr;
     uint32_t max_dma_window_size;
