@@ -1381,6 +1381,15 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
             Object *nvlink2_mrobj = object_property_get_link(gpu_obj,
                                                              "nvlink2-mr[0]",
                                                              NULL);
+            int linknum;
+
+            for (linknum = 0; linknum < ARRAY_SIZE(sphb->__npus); ++linknum) {
+                if (dev == sphb->__npus[linknum]) {
+                    _FDT((fdt_setprop_cell(fdt, offset, "ibm,nvlink",
+                                           PHANDLE_NVLINK(sphb, linknum))));
+                    break;
+                }
+            }
 
             _FDT(fdt_setprop_cell(fdt, offset, "ibm,gpu", PHANDLE_GPU(sphb)));
             _FDT((fdt_setprop_cell(fdt, offset, "phandle",
@@ -2381,7 +2390,23 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
                 memory_region_add_subregion(get_system_memory(), phb->nv2_gpa,
                                             mr);
             }
+            g_free(mem_name);
         }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(phb->__npus); ++i) {
+        char *linkname;
+        int off;
+
+        linkname = g_strdup_printf("npuphb%d-link@%d", phb->index, i);
+        off = fdt_add_subnode(fdt, 0, linkname);
+        _FDT(off);
+        _FDT((fdt_setprop_cell(fdt, off, "reg", i)));
+        _FDT((fdt_setprop_string(fdt, off, "compatible", "ibm,npu-link")));
+        _FDT((fdt_setprop_cell(fdt, off, "phandle", PHANDLE_NVLINK(phb, i))));
+        _FDT((fdt_setprop_cell(fdt, off, "ibm,npu-link-index", i)));
+
+        g_free(linkname);
     }
 
     return 0;

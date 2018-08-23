@@ -117,6 +117,7 @@ struct sPAPRPHBState {
 #define GPURAM_ASSOCIATIVITY(phb)    (0xf0 | (phb)->index)
 #define SPAPR_PCI_NV2RAM64_WIN_BASE  0x10000000000ULL /* 1 TiB */
 #define SPAPR_PCI_NV2RAM64_WIN_SIZE  0x10000000000ULL /* 1 TiB */
+#define PHANDLE_NVLINK(phb, num)     (0x00130000 | (((phb)->index) << 8) | (num))
 
 static inline qemu_irq spapr_phb_lsi_qirq(struct sPAPRPHBState *phb, int pin)
 {
