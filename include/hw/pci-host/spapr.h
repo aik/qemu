@@ -91,6 +91,7 @@ struct sPAPRPHBState {
     hwaddr mig_mem_win_addr, mig_mem_win_size;
     hwaddr mig_io_win_addr, mig_io_win_size;
     hwaddr nv2_gpa;
+    hwaddr nv2_atsd;
 
     PCIDevice *__gpu, *__npus[2]; /* just storage for QOM links */
 };

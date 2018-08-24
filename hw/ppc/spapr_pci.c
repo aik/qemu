@@ -1910,6 +1910,7 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_BOOL("ddw-nodef", sPAPRPHBState, ddw_kill_default, 0),
     DEFINE_PROP_UINT32("max-dma-window", sPAPRPHBState, max_dma_window_size, 0),
     DEFINE_PROP_UINT64("gpa", sPAPRPHBState, nv2_gpa, 0),
+    DEFINE_PROP_UINT64("atsd", sPAPRPHBState, nv2_atsd, 0x10000000000ULL),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -2397,6 +2398,8 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     for (i = 0; i < ARRAY_SIZE(phb->__npus); ++i) {
         char *linkname;
         int off;
+        Object *nvlink2_mrobj = object_property_get_link(OBJECT(phb->__npus[i]),
+                                                         "nvlink2-atsd-mr[0]", NULL);
 
         linkname = g_strdup_printf("npuphb%d-link@%d", phb->index, i);
         off = fdt_add_subnode(fdt, 0, linkname);
@@ -2407,6 +2410,14 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         _FDT((fdt_setprop_cell(fdt, off, "ibm,npu-link-index", i)));
 
         g_free(linkname);
+
+        if (nvlink2_mrobj) {
+            MemoryRegion *mr = MEMORY_REGION(nvlink2_mrobj);
+            if (!memory_region_is_mapped(mr)) {
+                memory_region_add_subregion(get_system_memory(), phb->nv2_gpa,
+                                            mr);
+            }
+        }
     }
 
     return 0;

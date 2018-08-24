@@ -3075,6 +3075,13 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         }
     }
 
+    if (vdev->vendor_id == PCI_VENDOR_ID_IBM && vdev->device_id == 0x04ea) {
+        ret = vfio_pci_npu2_atsd_init(vdev, errp);
+        if (ret) {
+            error_report("Failed to setup ATSD");
+        }
+    }
+
     vfio_register_err_notifier(vdev);
     vfio_register_req_notifier(vdev);
     vfio_setup_resetfn_quirk(vdev);
