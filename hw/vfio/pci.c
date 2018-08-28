@@ -25,6 +25,7 @@
 #include "hw/pci/msi.h"
 #include "hw/pci/msix.h"
 #include "hw/pci/pci_bridge.h"
+#include "hw/vfio/vfio.h"
 #include "qemu/error-report.h"
 #include "qemu/option.h"
 #include "qemu/range.h"
@@ -3280,3 +3281,10 @@ static void register_vfio_pci_dev_type(void)
 }
 
 type_init(register_vfio_pci_dev_type)
+
+unsigned long vfio_pci_get_dev_id(struct PCIDevice *pdev)
+{
+    VFIOPCIDevice *vdev = DO_UPCAST(VFIOPCIDevice, pdev, pdev);
+
+    return PCI_BUILD_BDF(vdev->host.bus, PCI_DEVFN(vdev->host.slot, vdev->host.function));
+}

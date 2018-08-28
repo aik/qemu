@@ -49,6 +49,7 @@
 #include "sysemu/kvm.h"
 #include "sysemu/hostmem.h"
 #include "sysemu/numa.h"
+#include "hw/vfio/vfio.h"
 
 /* Copied from the kernel arch/powerpc/platforms/pseries/msi.c */
 #define RTAS_QUERY_FN           0
@@ -1383,6 +1384,7 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
                                                              NULL);
             int linknum;
 
+            if (0)
             for (linknum = 0; linknum < ARRAY_SIZE(sphb->__npus); ++linknum) {
                 if (dev == sphb->__npus[linknum]) {
                     _FDT((fdt_setprop_cell(fdt, offset, "ibm,nvlink",
@@ -2180,6 +2182,12 @@ static void spapr_phb_pci_bus_enumerate_nvlink(PCIBus *bus, PCIDevice *pdev,
                 continue;
             }
 
+            if (sphb->__npus[n]) {
+                printf("+++Q+++ (%u) %s %u: skipping %d\n", getpid(), __func__, __LINE__, n);
+                g_free(buf);
+                continue;
+            }
+
             sphb->__npus[n] = pdev;
             object_property_add_link(OBJECT(sphb), buf, TYPE_PCI_DEVICE,
                                      (Object **)&sphb->__npus[n],
@@ -2266,6 +2274,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     sPAPRTCETable *tcet;
     PCIBus *bus = PCI_HOST_BRIDGE(phb)->bus;
     sPAPRFDT s_fdt;
+    const char compat[] = "IBM,Logical_PHB\x00IBM,npu-vphb";
 
     /* Start populating the FDT */
     nodename = g_strdup_printf("pci@%" PRIx64, phb->buid);
@@ -2274,7 +2283,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
 
     /* Write PHB properties */
     _FDT(fdt_setprop_string(fdt, bus_off, "device_type", "pci"));
-    _FDT(fdt_setprop_string(fdt, bus_off, "compatible", "IBM,Logical_PHB"));
+
     _FDT(fdt_setprop_cell(fdt, bus_off, "#address-cells", 0x3));
     _FDT(fdt_setprop_cell(fdt, bus_off, "#size-cells", 0x2));
     _FDT(fdt_setprop_cell(fdt, bus_off, "#interrupt-cells", 0x1));
@@ -2340,6 +2349,15 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
 
     spapr_phb_pci_enumerate_nvlink(phb);
 
+    if (phb->__npus[0] && phb->__npus[1] && phb->__gpu) {
+        _FDT(fdt_setprop(fdt, bus_off, "compatible", compat, sizeof(compat)));
+    } else {
+        _FDT(fdt_setprop_string(fdt, bus_off, "compatible", compat));
+    }
+
+    if (0)
+    _FDT((fdt_setprop_u64(fdt, bus_off, "ibm,mmio-atsd", phb->nv2_atsd)));
+
     /* Populate tree nodes with PCI devices attached */
     s_fdt.fdt = fdt;
     s_fdt.node_off = bus_off;
@@ -2353,6 +2371,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     if (ret) {
         return ret;
     }
+
 
     /* If spapr_phb_pci_enumerate_nvlink found GPU, add MR now */
     if (phb->__gpu) {
@@ -2395,33 +2414,116 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         }
     }
 
-    for (i = 0; i < ARRAY_SIZE(phb->__npus); ++i) {
-        char *linkname;
-        int off;
-        Object *nvlink2_mrobj = object_property_get_link(OBJECT(phb->__npus[i]),
-                                                         "nvlink2-atsd-mr[0]", NULL);
+    if (phb->__npus[0] && phb->__npus[1]) {
+        char *npuname;
+        int npuoff;
+        Object *nvlink2_mrobj;
+        nvlink2_mrobj = object_property_get_link(OBJECT(phb->__npus[0]),
+                                                 "nvlink2-atsd-mr[0]", NULL);
+        if (0) {
 
-        linkname = g_strdup_printf("npuphb%d-link@%d", phb->index, i);
-        off = fdt_add_subnode(fdt, 0, linkname);
-        _FDT(off);
-        _FDT((fdt_setprop_cell(fdt, off, "reg", i)));
-        _FDT((fdt_setprop_string(fdt, off, "compatible", "ibm,npu-link")));
-        _FDT((fdt_setprop_cell(fdt, off, "phandle", PHANDLE_NVLINK(phb, i))));
-        _FDT((fdt_setprop_cell(fdt, off, "ibm,npu-link-index", i)));
-
-        g_free(linkname);
-
+        npuname = g_strdup_printf("npuphb%d", phb->index);
+        npuoff = fdt_add_subnode(fdt, 0, npuname);
+        _FDT(npuoff);
+        _FDT(fdt_setprop_cell(fdt, npuoff, "#address-cells", 1));
+        _FDT(fdt_setprop_cell(fdt, npuoff, "#size-cells", 0));
+        _FDT((fdt_setprop_string(fdt, npuoff, "compatible", "ibm,power9-npu")));
+        g_free(npuname);
+        }
         if (nvlink2_mrobj) {
             MemoryRegion *mr = MEMORY_REGION(nvlink2_mrobj);
             if (!memory_region_is_mapped(mr)) {
-                memory_region_add_subregion(get_system_memory(), phb->nv2_gpa,
+                memory_region_add_subregion(get_system_memory(), phb->nv2_atsd,
                                             mr);
             }
+        }
+
+        if(0)
+        for (i = 0; i < ARRAY_SIZE(phb->__npus); ++i) {
+            char *linkname;
+            int off;
+
+            linkname = g_strdup_printf("link@%d", i);
+            off = fdt_add_subnode(fdt, npuoff, linkname);
+            _FDT(off);
+            _FDT((fdt_setprop_cell(fdt, off, "reg", i)));
+            _FDT((fdt_setprop_string(fdt, off, "compatible", "ibm,npu-link")));
+            _FDT((fdt_setprop_cell(fdt, off, "phandle", PHANDLE_NVLINK(phb, i))));
+            _FDT((fdt_setprop_cell(fdt, off, "ibm,npu-link-index", i)));
+
+            g_free(linkname);
         }
     }
 
     return 0;
 }
+
+#define RTAS_NPU2_CONTEXT_INIT  0
+#define RTAS_NPU2_CONTEXT_DESTROY 1
+#define RTAS_NPU2_LPAR_MAP 2
+
+static void rtas_ibm_npu2_context(PowerPCCPU *cpu,
+                                  sPAPRMachineState *spapr,
+                                  uint32_t token, uint32_t nargs,
+                                  target_ulong args, uint32_t nret,
+                                  target_ulong rets)
+{
+    sPAPRPHBState *sphb;
+    unsigned int option;
+    uint64_t buid;
+    PCIDevice *pci_dev;
+
+//    if ((nargs > 6) || (nret != 1)) {
+//        goto param_error_exit;
+//    }
+
+    option = rtas_ld(args, 0);
+    if (option > 2) {
+        goto param_error_exit;
+    }
+
+    buid = rtas_ldq(args, 1);
+    sphb = spapr_pci_find_phb(spapr, buid);
+    if (!sphb) {
+        goto param_error_exit;
+    }
+
+// RTAS_NPU2_CONTEXT_INIT,
+// BUID_HI(hose->buid),
+// BUID_LO(hose->buid),
+// PCI_DEVID(gpdev->bus->number, gpdev->devfn),
+// current->mm->context.id,
+// upper_32_bits(msr),
+// lower_32_bits(msr));
+
+    pci_dev = spapr_pci_find_dev(spapr, buid, rtas_ld(args, 3));
+    if (!pci_dev) {
+        goto param_error_exit;
+    }
+
+    switch (option) {
+    case RTAS_NPU2_CONTEXT_INIT:
+        break;
+    case RTAS_NPU2_CONTEXT_DESTROY:
+        break;
+    case RTAS_NPU2_LPAR_MAP:
+        break;
+    default:
+        goto param_error_exit;
+    }
+
+    vfio_ibm_npu2_context(&sphb->iommu_as, pci_dev, option,
+            rtas_ld(args, 4),
+            rtas_ld(args, 5),
+            rtas_ld(args, 6));
+
+    rtas_st(rets, 0, RTAS_OUT_SUCCESS);
+    return;
+
+param_error_exit:
+    rtas_st(rets, 0, RTAS_OUT_PARAM_ERROR);
+}
+
 
 void spapr_pci_rtas_init(void)
 {
@@ -2459,6 +2561,9 @@ void spapr_pci_rtas_init(void)
     spapr_rtas_register(RTAS_IBM_SLOT_ERROR_DETAIL,
                         "ibm,slot-error-detail",
                         rtas_ibm_slot_error_detail);
+    spapr_rtas_register(RTAS_IBM_NPU2_CONTEXT,
+                        "ibm,npu2-context",
+                        rtas_ibm_npu2_context);
 }
 
 static void spapr_pci_register_types(void)

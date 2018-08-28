@@ -2262,7 +2262,7 @@ int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
         return -errno;
     }
 
-    memory_region_init_ram_ptr(nv2mr, OBJECT(vdev), "nvlink2-atsd-mr",
+    memory_region_init_ram_device_ptr(nv2mr, OBJECT(vdev), "nvlink2-atsd-mr",
                                nv2region->size, p);
 
     trace_vfio_pci_nvlink2_ram_setup_quirk(vdev->vbasedev.name,

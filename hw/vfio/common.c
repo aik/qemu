@@ -1639,3 +1639,43 @@ int vfio_eeh_as_op(AddressSpace *as, uint32_t op)
     }
     return vfio_eeh_container_op(container, op);
 }
+
+int vfio_ibm_npu2_context(AddressSpace *as, struct PCIDevice *pdev,
+        unsigned op, unsigned contextid, unsigned msrhi, unsigned msrlo)
+{
+#ifdef CONFIG_KVM
+    VFIOAddressSpace *space = vfio_get_address_space(as);
+    VFIOContainer *container;
+    struct kvm_vfio_npu2_context param = { .op = op,
+        .devid = vfio_pci_get_dev_id(pdev),
+        .contextid = contextid,
+        .msrhi = msrhi,
+        .msrlo = msrlo,
+    };
+    struct kvm_device_attr attr = {
+        .group = KVM_DEV_VFIO_GROUP,
+        .attr = KVM_DEV_VFIO_PCI_DEV_NPU2_CONTEXT,
+        .addr = (uint64_t)(unsigned long)&param,
+    };
+
+    if (!kvm_enabled()) {
+        return -1;
+    }
+
+    QLIST_FOREACH(container, &space->containers, next) {
+        VFIOGroup *group;
+        QLIST_FOREACH(group, &container->group_list, container_next) {
+
+            param.groupfd = group->fd;
+
+            if (ioctl(vfio_kvm_device_fd, KVM_SET_DEVICE_ATTR, &attr)) {
+                error_report("vfio: failed to setup fd %d: %s",
+                             param.groupfd,
+                             strerror(errno));
+                return -1;
+            }
+        }
+    }
+#endif
+    return 0;
+}
