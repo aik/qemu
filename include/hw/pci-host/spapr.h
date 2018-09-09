@@ -79,7 +79,7 @@ struct sPAPRPHBState {
     uint64_t dma64_win_addr;
     uint32_t max_dma_window_size;
     uint32_t ddw_windows_supported;
-
+    bool ddw_kill_default;
     uint32_t numa_node;
 
     bool pcie_ecs; /* Allow access to PCIe extended config space? */

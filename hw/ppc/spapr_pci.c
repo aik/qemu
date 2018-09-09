@@ -1873,6 +1873,7 @@ static Property spapr_phb_properties[] = {
                      pcie_ecs, true),
     DEFINE_PROP_UINT32("ddw-windows", sPAPRPHBState, ddw_windows_supported,
                        SPAPR_PCI_DMA_MAX_WINDOWS),
+     DEFINE_PROP_BOOL("ddw-nodef", sPAPRPHBState, ddw_kill_default, 0),
     DEFINE_PROP_UINT32("max-dma-window", sPAPRPHBState, max_dma_window_size, 0),
     DEFINE_PROP_UINT64("gpa", sPAPRPHBState, nv2_gpa, 0),
     DEFINE_PROP_END_OF_LIST(),
@@ -2248,6 +2249,11 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     _FDT(fdt_setprop(fdt, bus_off, "reg", &bus_reg, sizeof(bus_reg)));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pci-config-space-type", 0x1));
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pe-total-#msi", XICS_IRQS_SPAPR));
+
+    if (phb->ddw_kill_default)
+        _FDT(fdt_setprop_cell(fdt, bus_off,
+                              "qemu,dma-force-remove-default", 1));
+
 
     /* Dynamic DMA window */
     if (phb->ddw_enabled) {
