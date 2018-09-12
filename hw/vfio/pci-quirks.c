@@ -2239,6 +2239,38 @@ int vfio_pci_nvlink2_ram_init(VFIOPCIDevice *vdev, Error **errp)
     return 0;
 }
 
+static uint64_t atsd_read(void *opaque,
+                          hwaddr addr,
+                          unsigned size)
+{
+    printf("+++Q+++ (%u) %s %u: %p %lx %x\n", getpid(), __func__, __LINE__,
+           opaque, (unsigned long) addr, size);
+    if (size == 4) {
+        return *(uint32_t *)opaque;
+    } else {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+        return 0;
+    }
+}
+
+static void atsd_write(void *opaque, hwaddr addr,
+                       uint64_t data, unsigned size)
+{
+    printf("+++Q+++ (%u) %s %u: %p %lx %x == %lx\n", getpid(), __func__, __LINE__,
+           opaque, (unsigned long) addr, size, (unsigned long) data);
+    if (size == 4) {
+        *(uint32_t *)opaque = data;
+    } else {
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+    }
+}
+
+static const MemoryRegionOps atsd_ops = {
+    .read = atsd_read,
+    .write = atsd_write,
+    .endianness = DEVICE_HOST_ENDIAN
+};
+
 int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
 {
     int ret;
@@ -2246,6 +2278,7 @@ int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
     struct vfio_region_info *nv2region = NULL;
     MemoryRegion *nv2mr = g_malloc0(sizeof(*nv2mr));
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     ret = vfio_get_dev_region_info(&vdev->vbasedev,
                                    VFIO_REGION_TYPE_PCI_VENDOR_TYPE |
                                    PCI_VENDOR_ID_IBM,
@@ -2262,9 +2295,13 @@ int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
         return -errno;
     }
 
-    memory_region_init_ram_device_ptr(nv2mr, OBJECT(vdev), "nvlink2-atsd-mr",
-                               nv2region->size, p);
-
+    if (0) {
+        memory_region_init_io(nv2mr, OBJECT(vdev), &atsd_ops, p,
+                              "nvlink2-atsd-mr", nv2region->size);
+    } else {
+        memory_region_init_ram_device_ptr(nv2mr, OBJECT(vdev), "nvlink2-atsd-mr",
+                                          nv2region->size, p);
+    }
     trace_vfio_pci_nvlink2_ram_setup_quirk(vdev->vbasedev.name,
                                            nv2region->size);
 

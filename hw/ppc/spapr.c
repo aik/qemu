@@ -3728,7 +3728,7 @@ static void spapr_phb_placement(sPAPRMachineState *spapr, uint32_t index,
                                 uint64_t *buid, hwaddr *pio,
                                 hwaddr *mmio32, hwaddr *mmio64,
                                 unsigned n_dma, uint32_t *liobns,
-                                hwaddr *nv2gpa, Error **errp)
+                                hwaddr *nv2gpa, hwaddr *nv2atsd, Error **errp)
 {
     /*
      * New-style PHB window placement.
@@ -3779,6 +3779,10 @@ static void spapr_phb_placement(sPAPRMachineState *spapr, uint32_t index,
     if (!*nv2gpa) {
         *nv2gpa = SPAPR_PCI_NV2RAM64_WIN_BASE +
             (index + 1) * SPAPR_PCI_NV2RAM64_WIN_SIZE;
+    }
+
+    if (!*nv2atsd) {
+        *nv2atsd = 0x10000000000ULL + (index + 1) * 0x10000;
     }
 }
 
@@ -4192,7 +4196,7 @@ static void phb_placement_2_7(sPAPRMachineState *spapr, uint32_t index,
                               uint64_t *buid, hwaddr *pio,
                               hwaddr *mmio32, hwaddr *mmio64,
                               unsigned n_dma, uint32_t *liobns,
-                              hwaddr *nv2_gpa, Error **errp)
+                              hwaddr *nv2_gpa, hwaddr *nv2atsd, Error **errp)
 {
     /* Legacy PHB placement for pseries-2.7 and earlier machine types */
     const uint64_t base_buid = 0x800000020000000ULL;
@@ -4238,6 +4242,7 @@ static void phb_placement_2_7(sPAPRMachineState *spapr, uint32_t index,
      */
 
     *nv2_gpa = 0;
+    *nv2atsd = 0;
 }
 
 static void spapr_machine_2_7_instance_options(MachineState *machine)

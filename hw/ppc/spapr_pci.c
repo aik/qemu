@@ -1384,7 +1384,6 @@ static void spapr_populate_pci_child_dt(PCIDevice *dev, void *fdt, int offset,
                                                              NULL);
             int linknum;
 
-            if (0)
             for (linknum = 0; linknum < ARRAY_SIZE(sphb->__npus); ++linknum) {
                 if (dev == sphb->__npus[linknum]) {
                     _FDT((fdt_setprop_cell(fdt, offset, "ibm,nvlink",
@@ -1653,7 +1652,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
                            &sphb->buid, &sphb->io_win_addr,
                            &sphb->mem_win_addr, &sphb->mem64_win_addr,
                            windows_supported, sphb->dma_liobn, &sphb->nv2_gpa,
-                           &local_err);
+                           &sphb->nv2_atsd, &local_err);
         if (local_err) {
             error_propagate(errp, local_err);
             return;
@@ -1912,7 +1911,7 @@ static Property spapr_phb_properties[] = {
     DEFINE_PROP_BOOL("ddw-nodef", sPAPRPHBState, ddw_kill_default, 0),
     DEFINE_PROP_UINT32("max-dma-window", sPAPRPHBState, max_dma_window_size, 0),
     DEFINE_PROP_UINT64("gpa", sPAPRPHBState, nv2_gpa, 0),
-    DEFINE_PROP_UINT64("atsd", sPAPRPHBState, nv2_atsd, 0x10000000000ULL),
+    DEFINE_PROP_UINT64("atsd", sPAPRPHBState, nv2_atsd, 0),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -2355,7 +2354,6 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         _FDT(fdt_setprop_string(fdt, bus_off, "compatible", compat));
     }
 
-    if (0)
     _FDT((fdt_setprop_u64(fdt, bus_off, "ibm,mmio-atsd", phb->nv2_atsd)));
 
     /* Populate tree nodes with PCI devices attached */
@@ -2420,8 +2418,6 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         Object *nvlink2_mrobj;
         nvlink2_mrobj = object_property_get_link(OBJECT(phb->__npus[0]),
                                                  "nvlink2-atsd-mr[0]", NULL);
-        if (0) {
-
         npuname = g_strdup_printf("npuphb%d", phb->index);
         npuoff = fdt_add_subnode(fdt, 0, npuname);
         _FDT(npuoff);
@@ -2429,7 +2425,7 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
         _FDT(fdt_setprop_cell(fdt, npuoff, "#size-cells", 0));
         _FDT((fdt_setprop_string(fdt, npuoff, "compatible", "ibm,power9-npu")));
         g_free(npuname);
-        }
+
         if (nvlink2_mrobj) {
             MemoryRegion *mr = MEMORY_REGION(nvlink2_mrobj);
             if (!memory_region_is_mapped(mr)) {
@@ -2438,7 +2434,6 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
             }
         }
 
-        if(0)
         for (i = 0; i < ARRAY_SIZE(phb->__npus); ++i) {
             char *linkname;
             int off;
