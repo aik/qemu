@@ -2246,7 +2246,7 @@ static uint64_t atsd_read(void *opaque,
     printf("+++Q+++ (%u) %s %u: %p %lx %x\n", getpid(), __func__, __LINE__,
            opaque, (unsigned long) addr, size);
     if (size == 4) {
-        return *(uint32_t *)opaque;
+        return 0;//*(uint32_t *)opaque;
     } else {
         printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         return 0;
@@ -2259,7 +2259,7 @@ static void atsd_write(void *opaque, hwaddr addr,
     printf("+++Q+++ (%u) %s %u: %p %lx %x == %lx\n", getpid(), __func__, __LINE__,
            opaque, (unsigned long) addr, size, (unsigned long) data);
     if (size == 4) {
-        *(uint32_t *)opaque = data;
+//        *(uint32_t *)opaque = data;
     } else {
         printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     }
@@ -2295,7 +2295,7 @@ int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
         return -errno;
     }
 
-    if (0) {
+    if (1) {
         memory_region_init_io(nv2mr, OBJECT(vdev), &atsd_ops, p,
                               "nvlink2-atsd-mr", nv2region->size);
     } else {
