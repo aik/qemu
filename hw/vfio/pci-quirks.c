@@ -2243,32 +2243,38 @@ static uint64_t atsd_read(void *opaque,
                           hwaddr addr,
                           unsigned size)
 {
-    printf("+++Q+++ (%u) %s %u: %p %lx %x\n", getpid(), __func__, __LINE__,
-           opaque, (unsigned long) addr, size);
+    uint64_t ret = (uint64_t) -1;
+    uint32_t dword;
+
     if (size == 4) {
-        return 0;//*(uint32_t *)opaque;
-    } else {
-        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
-        return 0;
+        memcpy(&dword, (char*)opaque + addr, 4);
+        ret = be32_to_cpu(dword);
     }
+
+    printf("+++Q+++ (%u) %s %u: %p %lx %x ret=%lx\n", getpid(), __func__, __LINE__,
+           opaque, (unsigned long) addr, size, (unsigned long) ret);
+
+    return ret;
 }
 
 static void atsd_write(void *opaque, hwaddr addr,
                        uint64_t data, unsigned size)
 {
-    printf("+++Q+++ (%u) %s %u: %p %lx %x == %lx\n", getpid(), __func__, __LINE__,
-           opaque, (unsigned long) addr, size, (unsigned long) data);
+    uint32_t dword = (uint32_t) -1;
+
     if (size == 4) {
-//        *(uint32_t *)opaque = data;
-    } else {
-        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+        dword = cpu_to_be32(data);
+        memcpy((char*)opaque + addr, &dword, 4);
     }
+
+    printf("+++Q+++ (%u) %s %u: %p %lx %x == %lx\n", getpid(), __func__, __LINE__,
+           opaque, (unsigned long) addr, size, (unsigned long) dword);
 }
 
 static const MemoryRegionOps atsd_ops = {
     .read = atsd_read,
     .write = atsd_write,
-    .endianness = DEVICE_HOST_ENDIAN
+    .endianness = DEVICE_BIG_ENDIAN
 };
 
 int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
@@ -2295,7 +2301,7 @@ int vfio_pci_npu2_atsd_init(VFIOPCIDevice *vdev, Error **errp)
         return -errno;
     }
 
-    if (1) {
+    if (0) {
         memory_region_init_io(nv2mr, OBJECT(vdev), &atsd_ops, p,
                               "nvlink2-atsd-mr", nv2region->size);
     } else {
