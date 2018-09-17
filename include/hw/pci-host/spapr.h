@@ -104,8 +104,8 @@ struct sPAPRPHBState {
 
 /* Without manual configuration, all PCI outbound windows will be
  * within this range */
-#define SPAPR_PCI_BASE               (1ULL << 45) /* 32 TiB */
-#define SPAPR_PCI_LIMIT              (1ULL << 46) /* 64 TiB */
+#define SPAPR_PCI_BASE               (1ULL << 44) /* 32 TiB */
+#define SPAPR_PCI_LIMIT              (1ULL << 45) /* 64 TiB */
 
 #define SPAPR_PCI_2_7_MMIO_WIN_SIZE  0xf80000000
 #define SPAPR_PCI_IO_WIN_SIZE        0x10000
