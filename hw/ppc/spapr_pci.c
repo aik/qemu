@@ -2273,7 +2273,8 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     sPAPRTCETable *tcet;
     PCIBus *bus = PCI_HOST_BRIDGE(phb)->bus;
     sPAPRFDT s_fdt;
-    const char compat[] = "IBM,Logical_PHB\x00IBM,npu-vphb";
+    const char compat[] = "IBM,Logical_PHB";
+    const char compat_npu[] = "IBM,Logical_PHB\x00IBM,npu-vphb";
 
     /* Start populating the FDT */
     nodename = g_strdup_printf("pci@%" PRIx64, phb->buid);
@@ -2294,9 +2295,9 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     /* TODO: fine tune the total count of allocatable MSIs per PHB */
     _FDT(fdt_setprop_cell(fdt, bus_off, "ibm,pe-total-#msi", XICS_IRQS_SPAPR));
 
-    if (phb->ddw_kill_default)
-        _FDT(fdt_setprop_cell(fdt, bus_off,
-                              "qemu,dma-force-remove-default", 1));
+//    if (phb->ddw_kill_default)
+//        _FDT(fdt_setprop_cell(fdt, bus_off,
+//                              "qemu,dma-force-remove-default", 1));
 
     /* Dynamic DMA window */
     if (phb->ddw_enabled) {
@@ -2349,12 +2350,15 @@ int spapr_populate_pci_dt(sPAPRPHBState *phb,
     spapr_phb_pci_enumerate_nvlink(phb);
 
     if (phb->__npus[0] && phb->__npus[1] && phb->__gpu) {
-        _FDT(fdt_setprop(fdt, bus_off, "compatible", compat, sizeof(compat)));
+        _FDT(fdt_setprop(fdt, bus_off, "compatible", compat_npu,
+                         sizeof(compat_npu)));
     } else {
         _FDT(fdt_setprop_string(fdt, bus_off, "compatible", compat));
     }
 
-    _FDT((fdt_setprop_u64(fdt, bus_off, "ibm,mmio-atsd", phb->nv2_atsd)));
+    if (phb->nv2_atsd) {
+        _FDT((fdt_setprop_u64(fdt, bus_off, "ibm,mmio-atsd", phb->nv2_atsd)));
+    }
 
     /* Populate tree nodes with PCI devices attached */
     s_fdt.fdt = fdt;
