@@ -185,7 +185,12 @@ int vfio_spapr_create_window(VFIOContainer *container,
     pages = MAX(pow2ceil(pages), 1); /* Round up */
     create.levels = MAX(1, (55 - create.page_shift) / 16);
 
-    ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
+    for ( ; create.levels; --create.levels) {
+        ret = ioctl(container->fd, VFIO_IOMMU_SPAPR_TCE_CREATE, &create);
+        if (!ret) {
+            break;
+        }
+    }
     if (ret) {
         error_report("Failed to create a window, ret = %d (%m)", ret);
         return -errno;
