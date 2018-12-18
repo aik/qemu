@@ -12,6 +12,7 @@
 #include "qemu/error-report.h"
 #include "qapi/error.h"
 #include "hw/ppc/spapr.h"
+#include "hw/ppc/spapr_xive.h"
 #include "hw/ppc/xics.h"
 #include "sysemu/kvm.h"
 
@@ -96,11 +97,6 @@ static void spapr_irq_init_xics(sPAPRMachineState *spapr, Error **errp)
     sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
     int nr_irqs = smc->irq->nr_irqs;
     Error *local_err = NULL;
-
-    /* Initialize the MSI IRQ allocator. */
-    if (!SPAPR_MACHINE_GET_CLASS(spapr)->legacy_irq_allocation) {
-        spapr_irq_msi_init(spapr, smc->irq->nr_msis);
-    }
 
     if (kvm_enabled()) {
         if (machine_kernel_irqchip_allowed(machine) &&
@@ -195,6 +191,24 @@ static void spapr_irq_print_info_xics(sPAPRMachineState *spapr, Monitor *mon)
     ics_pic_print_info(spapr->ics, mon);
 }
 
+static Object *spapr_irq_cpu_intc_create_xics(sPAPRMachineState *spapr,
+                                              Object *cpu, Error **errp)
+{
+    return icp_create(cpu, spapr->icp_type, XICS_FABRIC(spapr), errp);
+}
+
+static int spapr_irq_post_load_xics(sPAPRMachineState *spapr, int version_id)
+{
+    if (!object_dynamic_cast(OBJECT(spapr->ics), TYPE_ICS_KVM)) {
+        CPUState *cs;
+        CPU_FOREACH(cs) {
+            PowerPCCPU *cpu = POWERPC_CPU(cs);
+            icp_resend(ICP(cpu->intc));
+        }
+    }
+    return 0;
+}
+
 #define SPAPR_IRQ_XICS_NR_IRQS     0x1000
 #define SPAPR_IRQ_XICS_NR_MSIS     \
     (XICS_IRQ_BASE + SPAPR_IRQ_XICS_NR_IRQS - SPAPR_IRQ_MSI)
@@ -208,11 +222,152 @@ sPAPRIrq spapr_irq_xics = {
     .free        = spapr_irq_free_xics,
     .qirq        = spapr_qirq_xics,
     .print_info  = spapr_irq_print_info_xics,
+    .dt_populate = spapr_dt_xics,
+    .cpu_intc_create = spapr_irq_cpu_intc_create_xics,
+    .post_load   = spapr_irq_post_load_xics,
+};
+
+/*
+ * XIVE IRQ backend.
+ */
+static void spapr_irq_init_xive(sPAPRMachineState *spapr, Error **errp)
+{
+    MachineState *machine = MACHINE(spapr);
+    sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
+    uint32_t nr_servers = spapr_max_server_number(spapr);
+    DeviceState *dev;
+    int i;
+
+    /* KVM XIVE device not yet available */
+    if (kvm_enabled()) {
+        if (machine_kernel_irqchip_required(machine)) {
+            error_setg(errp, "kernel_irqchip requested. no KVM XIVE support");
+            return;
+        }
+    }
+
+    dev = qdev_create(NULL, TYPE_SPAPR_XIVE);
+    qdev_prop_set_uint32(dev, "nr-irqs", smc->irq->nr_irqs);
+    /*
+     * 8 XIVE END structures per CPU. One for each available priority
+     */
+    qdev_prop_set_uint32(dev, "nr-ends", nr_servers << 3);
+    qdev_init_nofail(dev);
+
+    spapr->xive = SPAPR_XIVE(dev);
+
+    /* Enable the CPU IPIs */
+    for (i = 0; i < nr_servers; ++i) {
+        spapr_xive_irq_claim(spapr->xive, SPAPR_IRQ_IPI + i, false);
+    }
+
+    spapr_xive_hcall_init(spapr);
+}
+
+static int spapr_irq_claim_xive(sPAPRMachineState *spapr, int irq, bool lsi,
+                                Error **errp)
+{
+    if (!spapr_xive_irq_claim(spapr->xive, irq, lsi)) {
+        error_setg(errp, "IRQ %d is invalid", irq);
+        return -1;
+    }
+    return 0;
+}
+
+static void spapr_irq_free_xive(sPAPRMachineState *spapr, int irq, int num)
+{
+    int i;
+
+    for (i = irq; i < irq + num; ++i) {
+        spapr_xive_irq_free(spapr->xive, i);
+    }
+}
+
+static qemu_irq spapr_qirq_xive(sPAPRMachineState *spapr, int irq)
+{
+    return spapr_xive_qirq(spapr->xive, irq);
+}
+
+static void spapr_irq_print_info_xive(sPAPRMachineState *spapr,
+                                      Monitor *mon)
+{
+    CPUState *cs;
+
+    CPU_FOREACH(cs) {
+        PowerPCCPU *cpu = POWERPC_CPU(cs);
+
+        xive_tctx_pic_print_info(XIVE_TCTX(cpu->intc), mon);
+    }
+
+    spapr_xive_pic_print_info(spapr->xive, mon);
+}
+
+static Object *spapr_irq_cpu_intc_create_xive(sPAPRMachineState *spapr,
+                                              Object *cpu, Error **errp)
+{
+    Object *obj = xive_tctx_create(cpu, XIVE_ROUTER(spapr->xive), errp);
+
+    /* (TCG) Early setting the OS CAM line for hotplugged CPUs as they
+     * don't benificiate from the reset of the XIVE IRQ backend
+     */
+    spapr_xive_set_tctx_os_cam(XIVE_TCTX(obj));
+    return obj;
+}
+
+static int spapr_irq_post_load_xive(sPAPRMachineState *spapr, int version_id)
+{
+    return 0;
+}
+
+static void spapr_irq_reset_xive(sPAPRMachineState *spapr, Error **errp)
+{
+    CPUState *cs;
+
+    CPU_FOREACH(cs) {
+        PowerPCCPU *cpu = POWERPC_CPU(cs);
+
+        /* (TCG) Set the OS CAM line of the thread interrupt context. */
+        spapr_xive_set_tctx_os_cam(XIVE_TCTX(cpu->intc));
+    }
+}
+
+/*
+ * XIVE uses the full IRQ number space. Set it to 8K to be compatible
+ * with XICS.
+ */
+
+#define SPAPR_IRQ_XIVE_NR_IRQS     0x2000
+#define SPAPR_IRQ_XIVE_NR_MSIS     (SPAPR_IRQ_XIVE_NR_IRQS - SPAPR_IRQ_MSI)
+
+sPAPRIrq spapr_irq_xive = {
+    .nr_irqs     = SPAPR_IRQ_XIVE_NR_IRQS,
+    .nr_msis     = SPAPR_IRQ_XIVE_NR_MSIS,
+
+    .init        = spapr_irq_init_xive,
+    .claim       = spapr_irq_claim_xive,
+    .free        = spapr_irq_free_xive,
+    .qirq        = spapr_qirq_xive,
+    .print_info  = spapr_irq_print_info_xive,
+    .dt_populate = spapr_dt_xive,
+    .cpu_intc_create = spapr_irq_cpu_intc_create_xive,
+    .post_load   = spapr_irq_post_load_xive,
+    .reset       = spapr_irq_reset_xive,
 };
 
 /*
  * sPAPR IRQ frontend routines for devices
  */
+void spapr_irq_init(sPAPRMachineState *spapr, Error **errp)
+{
+    sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
+
+    /* Initialize the MSI IRQ allocator. */
+    if (!SPAPR_MACHINE_GET_CLASS(spapr)->legacy_irq_allocation) {
+        spapr_irq_msi_init(spapr, smc->irq->nr_msis);
+    }
+
+    smc->irq->init(spapr, errp);
+}
 
 int spapr_irq_claim(sPAPRMachineState *spapr, int irq, bool lsi, Error **errp)
 {
@@ -233,6 +388,22 @@ qemu_irq spapr_qirq(sPAPRMachineState *spapr, int irq)
     sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
 
     return smc->irq->qirq(spapr, irq);
+}
+
+int spapr_irq_post_load(sPAPRMachineState *spapr, int version_id)
+{
+    sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
+
+    return smc->irq->post_load(spapr, version_id);
+}
+
+void spapr_irq_reset(sPAPRMachineState *spapr, Error **errp)
+{
+    sPAPRMachineClass *smc = SPAPR_MACHINE_GET_CLASS(spapr);
+
+    if (smc->irq->reset) {
+        smc->irq->reset(spapr, errp);
+    }
 }
 
 /*
@@ -301,4 +472,7 @@ sPAPRIrq spapr_irq_xics_legacy = {
     .free        = spapr_irq_free_xics,
     .qirq        = spapr_qirq_xics,
     .print_info  = spapr_irq_print_info_xics,
+    .dt_populate = spapr_dt_xics,
+    .cpu_intc_create = spapr_irq_cpu_intc_create_xics,
+    .post_load   = spapr_irq_post_load_xics,
 };
