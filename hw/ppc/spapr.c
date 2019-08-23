@@ -1025,6 +1025,7 @@ int spapr_h_cas_compose_response(SpaprMachineState *spapr,
     _FDT((fdt_pack(fdt)));
 
     if (fdt_totalsize(fdt) + sizeof(hdr) > size) {
+        g_free(fdt);
         trace_spapr_cas_failed(size);
         return -1;
     }
