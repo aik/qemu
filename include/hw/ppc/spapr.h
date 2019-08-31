@@ -11,6 +11,7 @@
 #include "hw/ppc/spapr_xive.h"  /* For SpaprXive */
 #include "hw/ppc/xics.h"        /* For ICSState */
 #include "hw/ppc/spapr_tpm_proxy.h"
+#include "chardev/char-fe.h"
 
 struct SpaprVioBus;
 struct SpaprPhbState;
@@ -206,6 +207,10 @@ struct SpaprMachineState {
 
     unsigned gpu_numa_id;
     SpaprTpmProxy *tpm_proxy;
+
+    CharBackend *uvdev;
+    char buf[256];
+    hwaddr guest_buf_addr;
 };
 
 #define H_SUCCESS         0
@@ -509,7 +514,7 @@ struct SpaprMachineState {
 /* Client Architecture support */
 #define KVMPPC_H_CAS            (KVMPPC_HCALL_BASE + 0x2)
 #define KVMPPC_H_UPDATE_DT      (KVMPPC_HCALL_BASE + 0x3)
-#define KVMPPC_HCALL_MAX        KVMPPC_H_UPDATE_DT
+#define KVMPPC_HCALL_MAX        0xf004
 
 /*
  * The hcall range 0xEF00 to 0xEF80 is reserved for use in facilitating
