@@ -1091,21 +1091,11 @@ static const PCISubClass cpu_subclass[] = {
     { 0xFF, NULL, NULL },
 };
 
-static const PCIIFace usb_iface[] = {
-    { PCI_CLASS_SERIAL_USB_UHCI, "usb-uhci" },
-    { PCI_CLASS_SERIAL_USB_OHCI, "usb-ohci", },
-    { PCI_CLASS_SERIAL_USB_EHCI, "usb-ehci" },
-    { PCI_CLASS_SERIAL_USB_XHCI, "usb-xhci" },
-    { PCI_CLASS_SERIAL_USB_UNKNOWN, "usb-unknown" },
-    { PCI_CLASS_SERIAL_USB_DEVICE, "usb-device" },
-    { 0xFF, NULL },
-};
-
 static const PCISubClass ser_subclass[] = {
     { PCI_CLASS_SERIAL_FIREWIRE, "firewire", NULL },
     { PCI_CLASS_SERIAL_ACCESS, "access-bus", NULL },
     { PCI_CLASS_SERIAL_SSA, "ssa", NULL },
-    { PCI_CLASS_SERIAL_USB, "usb", usb_iface },
+    { PCI_CLASS_SERIAL_USB, "usb", NULL },
     { PCI_CLASS_SERIAL_FIBER, "fibre-channel", NULL },
     { PCI_CLASS_SERIAL_SMBUS, "smb", NULL },
     { PCI_CLASS_SERIAL_IB, "infiniband", NULL },
