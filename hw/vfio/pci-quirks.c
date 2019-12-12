@@ -2187,6 +2187,14 @@ int vfio_add_virt_caps(VFIOPCIDevice *vdev, Error **errp)
     return 0;
 }
 
+static void vfio_pci_nvlink2_get_tgt(Object *obj, Visitor *v,
+                                     const char *name,
+                                     void *opaque, Error **errp)
+{
+    uint64_t tgt = (uintptr_t) opaque;
+    visit_type_uint64(v, name, &tgt, errp);
+}
+
 static void vfio_pci_nvlink2_get_link_speed(Object *obj, Visitor *v,
                                                  const char *name,
                                                  void *opaque, Error **errp)
@@ -2232,9 +2240,9 @@ int vfio_pci_nvidia_v100_ram_init(VFIOPCIDevice *vdev, Error **errp)
                                nv2reg->size, p);
     QLIST_INSERT_HEAD(&vdev->bars[0].quirks, quirk, next);
 
-    object_property_add_uint64_ptr(OBJECT(vdev), "nvlink2-tgt",
-                                   (void *)(uintptr_t)cap->tgt,
-                                   OBJ_PROP_FLAG_READ, NULL);
+    object_property_add(OBJECT(vdev), "nvlink2-tgt", "uint64",
+                        vfio_pci_nvlink2_get_tgt, NULL, NULL,
+                        (void *) (uintptr_t) cap->tgt, NULL);
     trace_vfio_pci_nvidia_gpu_setup_quirk(vdev->vbasedev.name, cap->tgt,
                                           nv2reg->size);
 free_exit:
@@ -2293,9 +2301,9 @@ int vfio_pci_nvlink2_init(VFIOPCIDevice *vdev, Error **errp)
         QLIST_INSERT_HEAD(&vdev->bars[0].quirks, quirk, next);
     }
 
-    object_property_add_uint64_ptr(OBJECT(vdev), "nvlink2-tgt",
-                                   (void *)(uintptr_t)captgt->tgt,
-                                   OBJ_PROP_FLAG_READ, NULL);
+    object_property_add(OBJECT(vdev), "nvlink2-tgt", "uint64",
+                        vfio_pci_nvlink2_get_tgt, NULL, NULL,
+                        (void *) (uintptr_t) captgt->tgt, NULL);
     trace_vfio_pci_nvlink2_setup_quirk_ssatgt(vdev->vbasedev.name, captgt->tgt,
                                               atsdreg->size);
 
