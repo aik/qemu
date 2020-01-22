@@ -23,6 +23,8 @@
 #include "sysemu/runstate.h"
 #include "qom/qom-qobject.h"
 #include "trace.h"
+#include "chardev/char-fe.h"
+#include "hw/ppc/spapr_vio.h"
 
 #include <libfdt.h>
 
@@ -46,7 +48,31 @@ typedef struct {
 typedef struct {
     char *path; /* the path used to open the instance */
     uint32_t phandle;
+    DeviceState *dev;
+    CharBackend *cbe;
 } OfInstance;
+
+static DeviceState *find_qdev(BusState *bus, const char *path, int pathlen)
+{
+    BusChild *kid;
+
+    QTAILQ_FOREACH(kid, &bus->children, sibling) {
+        const char *p = qdev_get_fw_dev_path(kid->child);
+        BusState *child;
+
+        if (p && strncmp(path, p, pathlen) == 0) {
+            return kid->child;
+        }
+        QLIST_FOREACH(child, &kid->child->child_bus, sibling) {
+            DeviceState *d = find_qdev(child, path, pathlen);
+
+            if (d) {
+                return d;
+            }
+        }
+    }
+    return NULL;
+}
 
 static int readstr(hwaddr pa, char *buf, int size)
 {
@@ -431,6 +457,7 @@ static uint32_t vof_parent(const void *fdt, uint32_t phandle)
 static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
 {
     uint32_t ret = PROM_ERROR;
+    int pathlen = strlen(path);
     OfInstance *inst = NULL;
 
     if (vof->of_instance_last == 0xFFFFFFFF) {
@@ -443,11 +470,25 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
     g_assert(inst->phandle);
     ++vof->of_instance_last;
 
+    inst->dev = find_qdev(sysbus_get_default(), path, pathlen);
     inst->path = g_strdup(path);
     g_hash_table_insert(vof->of_instances,
                         GINT_TO_POINTER(vof->of_instance_last),
                         inst);
     ret = vof->of_instance_last;
+
+    if (inst->dev) {
+        const char *cdevstr = object_property_get_str(OBJECT(inst->dev),
+                                                      "chardev", NULL);
+
+        if (cdevstr) {
+            Chardev *cdev = qemu_chr_find(cdevstr);
+
+            if (cdev) {
+                inst->cbe = cdev->be;
+            }
+        }
+    }
 
 trace_exit:
     trace_vof_open(path, inst ? inst->phandle : 0, ret);
@@ -568,7 +609,9 @@ static uint32_t vof_write(Vof *vof, uint32_t ihandle, uint32_t buf,
             return PROM_ERROR;
         }
 
-        /* FIXME: there is no backend(s) yet so just call a trace */
+        if (inst->cbe) {
+            qemu_chr_fe_write_all(inst->cbe, (uint8_t *) tmp, cb);
+        }
         if (trace_event_get_state(TRACE_VOF_WRITE) &&
             qemu_loglevel_mask(LOG_TRACE)) {
             tmp[cb] = '\0';
@@ -577,6 +620,43 @@ static uint32_t vof_write(Vof *vof, uint32_t ihandle, uint32_t buf,
     }
 
     return len;
+}
+
+static uint32_t vof_read(Vof *vof, uint32_t ihandle, uint32_t buf,
+                         uint32_t len)
+{
+    uint32_t ret = len;
+    hwaddr xlat = 0, xlen = len;
+    MemoryRegion *mr;
+    OfInstance *inst = (OfInstance *)
+        g_hash_table_lookup(vof->of_instances, GINT_TO_POINTER(ihandle));
+
+    if (!inst) {
+        trace_vof_error_read(ihandle);
+        return PROM_ERROR;
+    }
+
+    mr = address_space_translate(&address_space_memory, buf, &xlat, &xlen, true,
+                                 MEMTXATTRS_UNSPECIFIED);
+    if (!mr) {
+        trace_vof_error_read(ihandle);
+        return PROM_ERROR;
+    }
+
+    if (inst->cbe) {
+        SpaprVioDevice *sdev;
+
+        sdev = (SpaprVioDevice *) object_dynamic_cast(OBJECT(inst->dev),
+                                                      TYPE_VIO_SPAPR_DEVICE);
+        if (sdev) {
+            uint8_t *tmp = memory_region_get_ram_ptr(mr) + xlat;
+
+            ret = vty_getchars(sdev, tmp, MIN(len, xlen));
+        }
+    }
+    trace_vof_read(ihandle, ret, len);
+
+    return ret;
 }
 
 static void vof_claimed_dump(GArray *claimed)
@@ -892,6 +972,8 @@ static uint32_t vof_client_handle(MachineState *ms, void *fdt, Vof *vof,
         ret = vof_instance_to_path(fdt, vof, args[0], args[1], args[2]);
     } else if (cmpserv("write", 3, 1)) {
         ret = vof_write(vof, args[0], args[1], args[2]);
+    } else if (cmpserv("read", 3, 1)) {
+        ret = vof_read(vof, args[0], args[1], args[2]);
     } else if (cmpserv("claim", 3, 1)) {
         uint64_t ret64 = vof_claim(vof, args[0], args[1], args[2]);
 
