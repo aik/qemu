@@ -1806,7 +1806,7 @@ target_ulong do_client_architecture_support(PowerPCCPU *cpu,
         spapr_setup_hpt(spapr);
     }
 
-    fdt = spapr_build_fdt(spapr, false, fdt_bufsize);
+    fdt = spapr_build_fdt(spapr, spapr->vof != NULL, fdt_bufsize);
 
     g_free(spapr->fdt_blob);
     spapr->fdt_size = fdt_totalsize(fdt);
@@ -1846,6 +1846,24 @@ static target_ulong h_client_architecture_support(PowerPCCPU *cpu,
                                   spapr->fdt_size);
         trace_spapr_cas_continue(spapr->fdt_size + sizeof(hdr));
     }
+
+    return ret;
+}
+
+target_ulong spapr_vof_client_architecture_support(CPUState *cs,
+                                                  target_ulong ovec_addr)
+{
+    SpaprMachineState *spapr = SPAPR_MACHINE(qdev_get_machine());
+
+    target_ulong ret = do_client_architecture_support(POWERPC_CPU(cs), spapr,
+                                                      ovec_addr, FDT_MAX_SIZE);
+
+    /*
+     * This adds stdout and generates phandles for boottime and CAS FDTs.
+     * It is alright to update the FDT here as do_client_architecture_support()
+     * does not pack it.
+     */
+    spapr_vof_client_dt_finalize(spapr, spapr->fdt_blob);
 
     return ret;
 }
