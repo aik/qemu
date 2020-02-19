@@ -12,6 +12,7 @@ config PSERIES
     select MSI_NONBROKEN
     select FDT_PPC
     select CHRP_NVRAM
+    select VOF
 
 config SPAPR_RNG
     bool
@@ -142,4 +143,7 @@ config FW_CFG_PPC
     bool
 
 config FDT_PPC
+    bool
+
+config VOF
     bool
