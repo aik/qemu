@@ -84,6 +84,9 @@ target_ulong spapr_h_vof_client(PowerPCCPU *cpu, SpaprMachineState *spapr,
 void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
 {
     char *stdout_path = spapr_vio_stdout_path(spapr->vio_bus);
+    size_t cb = 0;
+    char *bootlist = get_boot_devices_list(&cb);
+    int chosen;
 
     vof_build_dt(fdt, spapr->vof);
 
@@ -95,6 +98,15 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
     if (stdout_path) {
         _FDT(vof_client_open_store(fdt, spapr->vof, "/chosen", "stdout",
                                    stdout_path));
+        _FDT(vof_client_open_store(fdt, spapr->vof, "/chosen", "stdin",
+                                   stdout_path));
+    }
+
+    _FDT(chosen = fdt_path_offset(fdt, "/chosen"));
+//    _FDT(fdt_setprop_string(fdt, chosen, "bootargs",
+//                            spapr->vof.bootargs ? : ""));
+    if (bootlist) {
+        _FDT(fdt_setprop_string(fdt, chosen, "bootpath", bootlist));
     }
 }
 
