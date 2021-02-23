@@ -1099,6 +1099,18 @@ void vof_build_dt(void *fdt, Vof *vof)
     bool found = false;
     GArray *phandles = g_array_new(false, false, sizeof(uint32_t));
 
+    /* Add options now, doing it at the end of this __func__ breaks it :-/ */
+    offset = fdt_add_subnode(fdt, 0, "options");
+    if (offset > 0) {
+        struct winsize ws;
+
+        if (ioctl(1, TIOCGWINSZ, &ws) != -1) {
+            _FDT(fdt_setprop_cell(fdt, offset, "screen-#columns", ws.ws_col));
+            _FDT(fdt_setprop_cell(fdt, offset, "screen-#rows", ws.ws_row));
+        }
+        _FDT(fdt_setprop_cell(fdt, offset, "real-mode?", 1));
+    }
+
     /* Find all predefined phandles */
     for (offset = fdt_next_node(fdt, -1, NULL);
          offset >= 0;
