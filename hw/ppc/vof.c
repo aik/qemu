@@ -54,6 +54,7 @@ typedef struct {
     BlockBackend *blk;
     uint64_t blk_pos;
     uint16_t blk_physical_block_size;
+    char *params;
 } OfInstance;
 
 static int readstr(hwaddr pa, char *buf, int size)
@@ -83,6 +84,53 @@ static bool cmpservice(const char *s, unsigned nargs, unsigned nret,
 
     return true;
 }
+
+#if 0
+static void split_path(const char *fullpath, char **node, char **unit,
+                       char **part)
+{
+    const char *c, *p = NULL, *u = NULL;
+
+    *node = *unit = *part = NULL;
+
+    if (fullpath[0] == '\0') {
+        *node = g_strdup(fullpath);
+        return;
+    }
+
+    for (c = fullpath + strlen(fullpath) - 1; c > fullpath; --c) {
+        if (*c == '/') {
+            break;
+        }
+        if (*c == ':') {
+            p = c + 1;
+            continue;
+        }
+        if (*c == '@') {
+            u = c + 1;
+            continue;
+        }
+    }
+
+    if (p && u && p < u) {
+        p = NULL;
+    }
+
+    if (u && p) {
+        *node = g_strndup(fullpath, u - fullpath - 1);
+        *unit = g_strndup(u, p - u - 1);
+        *part = g_strdup(p);
+    } else if (!u && p) {
+        *node = g_strndup(fullpath, p - fullpath - 1);
+        *part = g_strdup(p);
+    } else if (!p && u) {
+        *node = g_strndup(fullpath, u - fullpath - 1);
+        *unit = g_strdup(u);
+    } else {
+        *node = g_strdup(fullpath);
+    }
+}
+#endif
 
 static void prop_format(char *tval, int tlen, const void *prop, int len)
 {
@@ -494,6 +542,7 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
     int pathlen = strlen(path);
     char *params;
     OfInstance *inst = NULL;
+    g_autofree char *node = NULL, *unit = NULL, *part = NULL;
 
     if (vof->of_instance_last == 0xFFFFFFFF) {
         /* We do not recycle ihandles yet */
@@ -512,6 +561,7 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
 
     inst->dev = of_client_find_qom_dev(sysbus_get_default(), path, pathlen);
     inst->path = g_strdup(path);
+    inst->params = g_strdup(part);
     g_hash_table_insert(vof->of_instances,
                         GINT_TO_POINTER(vof->of_instance_last),
                         inst);
@@ -1163,6 +1213,7 @@ static void vof_instance_free(gpointer data)
 {
     OfInstance *inst = (OfInstance *)data;
 
+    g_free(inst->params);
     g_free(inst->path);
     g_free(inst);
 }
