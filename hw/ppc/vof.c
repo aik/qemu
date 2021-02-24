@@ -46,6 +46,7 @@ typedef struct {
 typedef struct {
     char *path; /* the path used to open the instance */
     uint32_t phandle;
+    char *params;
 } OfInstance;
 
 #define VOF_MEM_READ(pa, buf, size) \
@@ -92,6 +93,51 @@ static void dump_ih_cb(gpointer key, gpointer value, gpointer user_data)
 static void dump_ih(Vof *vof)
 {
     g_hash_table_foreach(vof->of_instances, dump_ih_cb, NULL);
+}
+
+static void split_path(const char *fullpath, char **node, char **unit,
+                       char **part)
+{
+    const char *c, *p = NULL, *u = NULL;
+
+    *node = *unit = *part = NULL;
+
+    if (fullpath[0] == '\0') {
+        *node = g_strdup(fullpath);
+        return;
+    }
+
+    for (c = fullpath + strlen(fullpath) - 1; c > fullpath; --c) {
+        if (*c == '/') {
+            break;
+        }
+        if (*c == ':') {
+            p = c + 1;
+            continue;
+        }
+        if (*c == '@') {
+            u = c + 1;
+            continue;
+        }
+    }
+
+    if (p && u && p < u) {
+        p = NULL;
+    }
+
+    if (u && p) {
+        *node = g_strndup(fullpath, u - fullpath - 1);
+        *unit = g_strndup(u, p - u - 1);
+        *part = g_strdup(p);
+    } else if (!u && p) {
+        *node = g_strndup(fullpath, p - fullpath - 1);
+        *part = g_strdup(p);
+    } else if (!p && u) {
+        *node = g_strndup(fullpath, u - fullpath - 1);
+        *unit = g_strdup(u);
+    } else {
+        *node = g_strdup(fullpath);
+    }
 }
 
 static void prop_format(char *tval, int tlen, const void *prop, int len)
@@ -150,8 +196,25 @@ static int phandle_to_path(const void *fdt, uint32_t ph, char *buf, int len)
     return get_path(fdt, ret, buf, len);
 }
 
+static int vof_fdt_path_offset(const void *fdt, const char *node,
+                               const char *unit)
+{
+    int offset;
+
+    offset = fdt_path_offset(fdt, node);
+
+    if (offset < 0 && unit) {
+        g_autofree char *tmp = g_strdup_printf("%s@%s", node, unit);
+
+        offset = fdt_path_offset(fdt, tmp);
+    }
+
+    return offset;
+}
+
 static uint32_t vof_finddevice(const void *fdt, uint32_t nodeaddr)
 {
+    g_autofree char *node = NULL, *unit = NULL, *part = NULL;
     char fullnode[1024];
     uint32_t ret = -1;
     int offset;
@@ -160,7 +223,8 @@ static uint32_t vof_finddevice(const void *fdt, uint32_t nodeaddr)
         return (uint32_t) ret;
     }
 
-    offset = fdt_path_offset(fdt, fullnode);
+    split_path(fullnode, &node, &unit, &part);
+    offset = vof_fdt_path_offset(fdt, node, unit);
     if (offset >= 0) {
         ret = fdt_get_phandle(fdt, offset);
     }
@@ -439,13 +503,16 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, const char *path)
     int offset;
     uint32_t ret = 0;
     OfInstance *inst = NULL;
+    g_autofree char *node = NULL, *unit = NULL, *part = NULL;
 
     if (vof->of_instance_last == 0xFFFFFFFF) {
         /* We do not recycle ihandles yet */
         goto trace_exit;
     }
 
-    offset = fdt_path_offset(fdt, path);
+    split_path(path, &node, &unit, &part);
+
+    offset = vof_fdt_path_offset(fdt, node, unit);
     if (offset < 0) {
         trace_vof_error_unknown_path(path);
         goto trace_exit;
@@ -457,6 +524,7 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, const char *path)
     ++vof->of_instance_last;
 
     inst->path = g_strdup(path);
+    inst->params = g_strdup(part);
     g_hash_table_insert(vof->of_instances,
                         GINT_TO_POINTER(vof->of_instance_last),
                         inst);
@@ -916,6 +984,7 @@ static void vof_instance_free(gpointer data)
 {
     OfInstance *inst = (OfInstance *) data;
 
+    g_free(inst->params);
     g_free(inst->path);
     g_free(inst);
 }
