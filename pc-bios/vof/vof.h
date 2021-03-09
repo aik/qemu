@@ -31,8 +31,16 @@ void *memset(void *dest, int c, size_t size);
 
 /* CI wrappers */
 void ci_panic(const char *str);
+ihandle ci_open(const char *path);
+void ci_close(ihandle ih);
+uint32_t ci_read(ihandle ih, void *buf, int len);
+uint32_t ci_write(ihandle ih, const void *buf, int len);
+void *ci_claim(void *virt, uint32_t size, uint32_t align);
+uint32_t ci_release(void *virt, uint32_t size);
 phandle ci_finddevice(const char *path);
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len);
+void ci_stdout(const char *buf);
+void ci_stdoutn(const char *buf, int len);
 
 /* booting from -kernel */
 void boot_from_memory(uint64_t initrd, uint64_t initrdsize);

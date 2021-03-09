@@ -77,7 +77,28 @@ static int call_ci(const char *service, int nargs, int nret, ...)
 
 void ci_panic(const char *str)
 {
+    ci_stdout(str);
     call_ci("exit", 0, 0);
+}
+
+ihandle ci_open(const char *path)
+{
+    return call_ci("open", 1, 1, path);
+}
+
+void ci_close(ihandle ih)
+{
+    call_ci("close", 1, 0, ih);
+}
+
+uint32_t ci_read(ihandle ih, void *buf, int len)
+{
+    return call_ci("read", 3, 1, ih, buf, len);
+}
+
+uint32_t ci_write(ihandle ih, const void *buf, int len)
+{
+    return call_ci("write", 3, 1, ih, buf, len);
 }
 
 phandle ci_finddevice(const char *path)
@@ -88,4 +109,33 @@ phandle ci_finddevice(const char *path)
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len)
 {
     return call_ci("getprop", 4, 1, ph, propname, prop, len);
+}
+
+void ci_stdoutn(const char *buf, int len)
+{
+    static ihandle istdout;
+
+    if (!istdout) {
+        phandle chosen = ci_finddevice("/chosen");
+
+        ci_getprop(chosen, "stdout", &istdout, sizeof(istdout));
+    }
+    ci_write(istdout, buf, len);
+}
+
+void ci_stdout(const char *buf)
+{
+    ci_stdoutn(buf, strlen(buf));
+}
+
+void *ci_claim(void *virt, uint32_t size, uint32_t align)
+{
+    uint32_t ret = call_ci("claim", 3, 1, ADDR(virt), size, align);
+
+    return (void *) (unsigned long) ret;
+}
+
+uint32_t ci_release(void *virt, uint32_t size)
+{
+    return call_ci("release", 2, 1, ADDR(virt), size);
 }
