@@ -183,6 +183,7 @@ struct SpaprMachineState {
     long initrd_size;
     long fw_size;
     Vof *vof;
+    uint64_t fw_addr;
     uint64_t rtc_offset; /* Now used only during incoming migration */
     struct PPCTimebase tb;
     bool has_graphics;
