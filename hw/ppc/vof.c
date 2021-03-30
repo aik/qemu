@@ -26,6 +26,22 @@
 #include "chardev/char-fe.h"
 #include "hw/ppc/spapr_vio.h"
 
+#include <termios.h>
+#include "qapi/error.h"
+#include "exec/memory.h"
+#include "hw/ppc/spapr.h"
+#include "hw/ppc/spapr_vio.h"
+#include "hw/ppc/fdt.h"
+#include "hw/block/block.h"
+#include "sysemu/block-backend.h"
+#include "sysemu/sysemu.h"
+#include "chardev/char-fe.h"
+#include "qom/qom-qobject.h"
+#include "elf.h"
+#include "hw/ppc/ppc.h"
+#include "hw/loader.h"
+
+
 #include <libfdt.h>
 
 /*
@@ -51,6 +67,9 @@ typedef struct {
     char *params;
     DeviceState *dev;
     CharBackend *cbe;
+    BlockBackend *blk;
+    uint64_t blk_pos;
+    uint16_t blk_physical_block_size;
 } OfInstance;
 
 #define VOF_MEM_READ(pa, buf, size) \
@@ -566,6 +585,8 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, const char *path)
     if (inst->dev) {
         const char *cdevstr = object_property_get_str(OBJECT(inst->dev),
                                                       "chardev", NULL);
+        const char *blkstr = object_property_get_str(OBJECT(inst->dev),
+                                                     "drive", NULL);
 
         if (cdevstr) {
             Chardev *cdev = qemu_chr_find(cdevstr);
@@ -573,9 +594,15 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, const char *path)
             if (cdev) {
                 inst->cbe = cdev->be;
             }
+        } else if (blkstr) {
+            BlockConf conf = { 0 };
+
+            inst->blk = blk_by_name(blkstr);
+            conf.blk = inst->blk;
+            blkconf_blocksizes(&conf, NULL);
+            inst->blk_physical_block_size = conf.physical_block_size;
         }
     }
-
 
 trace_exit:
     trace_vof_open(path, inst ? inst->phandle : 0, ret);
@@ -688,7 +715,9 @@ static uint32_t vof_write(Vof *vof, uint32_t ihandle, uint32_t buf,
         if (inst->cbe) {
             toprint = qemu_chr_fe_write_all(inst->cbe, (uint8_t *) tmp, toprint);
         }
-        if (trace_event_get_state(TRACE_VOF_WRITE) &&
+        if (inst->blk) {
+            trace_vof_blk_write(ihandle, len);
+        } else if (trace_event_get_state(TRACE_VOF_WRITE) &&
             qemu_loglevel_mask(LOG_TRACE)) {
             char *c;
 
@@ -729,7 +758,35 @@ static uint32_t vof_read(Vof *vof, uint32_t ihandle, uint32_t bufaddr,
                 SpaprVioDevice *sdev = VIO_SPAPR_DEVICE(inst->dev);
 
                 ret = vty_getchars(sdev, buf, len); /* qemu_chr_fe_read_all? */
+            } else if (inst->blk) {
+                int rc = blk_pread(inst->blk, inst->blk_pos, buf, len);
+
+                if (rc > 0) {
+                    ret = rc;
+                }
+                trace_vof_blk_read(ihandle, inst->blk_pos, len, ret);
+                if (rc > 0) {
+                    inst->blk_pos += rc;
+                }
             }
+        }
+    }
+
+    return ret;
+}
+
+static uint32_t vof_seek(Vof *vof, uint32_t ihandle, uint32_t hi, uint32_t lo)
+{
+    uint32_t ret = -1;
+    uint64_t pos = ((uint64_t) hi << 32) | lo;
+    OfInstance *inst = (OfInstance *)
+        g_hash_table_lookup(vof->of_instances, GINT_TO_POINTER(ihandle));
+
+    if (inst) {
+        if (inst->blk) {
+            inst->blk_pos = pos;
+            ret = 1;
+            trace_vof_blk_seek(ihandle, pos, ret);
         }
     }
 
@@ -944,6 +1001,21 @@ static uint32_t vof_call_method(Vof *vof, uint32_t methodaddr, uint32_t ihandle,
             ret = 0;
             *ret2 = param1; /* rtas-base */
         }
+    } else if (inst->blk) {
+        if (strcmp(method, "block-size") == 0) {
+            ret = 0;
+            *ret2 = inst->blk_physical_block_size;
+        } else if (strcmp(method, "#blocks") == 0) {
+            ret = 0;
+            *ret2 = blk_getlength(inst->blk) / inst->blk_physical_block_size;
+        }
+     } else if (inst->dev) {
+        if (strcmp(method, "vscsi-report-luns") == 0) {
+            /* TODO: Not implemented yet, not clear when it is really needed */
+            ret = -1;
+            *ret2 = 1;
+        }
+
     } else {
         trace_vof_error_unknown_method(method);
     }
@@ -1030,6 +1102,8 @@ uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,
         ret = vof_write(vof, args[0], args[1], args[2]);
     } else if (cmpserv("read", 3, 1)) {
         ret = vof_read(vof, args[0], args[1], args[2]);
+    } else if (cmpserv("seek", 3, 1)) {
+        ret = vof_seek(vof, args[0], args[1], args[2]);
     } else if (cmpserv("claim", 3, 1)) {
         ret = vof_claim(vof, args[0], args[1], args[2]);
         if (ret != -1) {
@@ -1110,6 +1184,21 @@ void vof_build_dt(void *fdt, Vof *vof)
         }
         _FDT(fdt_setprop_cell(fdt, offset, "real-mode?", 1));
     }
+
+    /* Add "disk" nodes to SCSI hosts, same for "network" */
+    for (offset = fdt_next_node(fdt, -1, NULL), phandle = 1;
+         offset >= 0;
+         offset = fdt_next_node(fdt, offset, NULL), ++phandle) {
+
+        const char *nodename = fdt_get_name(fdt, offset, NULL);
+        if (strncmp(nodename, "scsi@", 5) == 0 ||
+            strncmp(nodename, "v-scsi@", 7) == 0) {
+            int disk_node_off = fdt_add_subnode(fdt, offset, "disk");
+
+            fdt_setprop_string(fdt, disk_node_off, "device_type", "block");
+        }
+    }
+
 
     /* Find all predefined phandles */
     for (offset = fdt_next_node(fdt, -1, NULL);

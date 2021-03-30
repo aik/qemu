@@ -91,6 +91,17 @@ void ci_close(ihandle ih)
     call_ci("close", 1, 0, ih);
 }
 
+uint32_t ci_block_size(ihandle ih)
+{
+    return 512;
+}
+
+uint32_t ci_seek(ihandle ih, uint64_t offset)
+{
+    return call_ci("seek", 3, 1, ih, (prom_arg_t)(offset >> 32),
+                     (prom_arg_t)(offset & 0xFFFFFFFFUL));
+}
+
 uint32_t ci_read(ihandle ih, void *buf, int len)
 {
     return call_ci("read", 3, 1, ih, buf, len);

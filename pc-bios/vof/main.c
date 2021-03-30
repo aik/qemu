@@ -18,5 +18,6 @@ void entry_c(void)
 
     ci_stdout("*** Virtual Open Firmware ***\n");
     boot_from_memory(initrd, initrdsize);
+    boot_block();
     ci_panic("*** No boot target ***\n");
 }
