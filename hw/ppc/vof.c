@@ -1019,6 +1019,7 @@ static void vof_quiesce(void *fdt, Vof *vof)
     }
 
     vof_claimed_dump(vof->claimed);
+    vof->quiesced = true;
 }
 
 uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,
@@ -1030,6 +1031,11 @@ uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,
     /* @nrets includes the value which this function returns */
 #define cmpserv(s, a, r) \
     cmpservice(service, nargs, nrets, (s), (a), (r))
+
+    /* This is not a bug if CI is called after "quiesce" but still suspicios */
+    if (vof->quiesced) {
+        trace_vof_warn_quiesced();
+    }
 
     if (cmpserv("finddevice", 1, 1)) {
         ret = vof_finddevice(fdt, args[0]);
