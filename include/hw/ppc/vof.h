@@ -14,6 +14,7 @@ typedef struct Vof {
     uint32_t of_instance_last;
     char *bootargs;
     long fw_size;
+    bool quiesced;
 } Vof;
 
 int vof_client_call(MachineState *ms, Vof *vof, void *fdt,
