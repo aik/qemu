@@ -15,6 +15,7 @@ typedef struct Vof {
     char *bootargs;
     uint32_t initrd_base; /* Updated in spapr at CAS */
     long initrd_size; /* Updated in spapr at CAS */
+    bool quiesced;
 } Vof;
 
 uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,

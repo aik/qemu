@@ -83,6 +83,17 @@ static bool cmpservice(const char *s, unsigned nargs, unsigned nret,
     return true;
 }
 
+static void dump_ih_cb(gpointer key, gpointer value, gpointer user_data)
+{
+    printf("+++Q+++ (%u) %s %u: %lx %lx\n", getpid(), __func__, __LINE__,
+            (unsigned long) key,  (unsigned long) value);
+}
+
+static void dump_ih(Vof *vof)
+{
+    g_hash_table_foreach(vof->of_instances, dump_ih_cb, NULL);
+}
+
 static void prop_format(char *tval, int tlen, const void *prop, int len)
 {
     int i;
@@ -469,16 +480,20 @@ uint32_t vof_client_open_store(void *fdt, Vof *vof, const char *nodename,
 static uint32_t vof_open(void *fdt, Vof *vof, uint32_t pathaddr)
 {
     char path[VOF_MAX_PATH];
+    uint32_t ret;
 
     if (readstr(pathaddr, path, sizeof(path))) {
         return -1;
     }
 
-    return vof_do_open(fdt, vof, path);
+    ret = vof_do_open(fdt, vof, path);
+    dump_ih(vof);
+    return ret;
 }
 
 static void vof_close(Vof *vof, uint32_t ihandle)
 {
+    dump_ih(vof);
     if (!g_hash_table_remove(vof->of_instances, GINT_TO_POINTER(ihandle))) {
         trace_vof_error_unknown_ihandle_close(ihandle);
     }
@@ -821,6 +836,7 @@ static void vof_quiesce(void *fdt, Vof *vof)
     }
 
     vof_claimed_dump(vof->claimed);
+    vof->quiesced = true;
 }
 
 uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,
@@ -832,6 +848,11 @@ uint32_t vof_client_call(void *fdt, Vof *vof, const char *service,
     /* @nrets includes the value which this function returns */
 #define cmpserv(s, a, r) \
     cmpservice(service, nargs, nrets, (s), (a), (r))
+
+    /* This is not a bug if CI is called after "quiesce" but still suspicios */
+    if (vof->quiesced) {
+        trace_vof_warn_quiesced();
+    }
 
     if (cmpserv("finddevice", 1, 1)) {
         ret = vof_finddevice(fdt, args[0]);
