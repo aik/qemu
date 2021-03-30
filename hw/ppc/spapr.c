@@ -2685,7 +2685,7 @@ static void spapr_machine_init(MachineState *machine)
     int i;
     MemoryRegion *sysmem = get_system_memory();
     long load_limit, fw_size;
-    char *filename;
+    g_autofree char *filename = NULL;
     Error *resize_hpt_err = NULL;
 
     /*
@@ -3001,12 +3001,18 @@ static void spapr_machine_init(MachineState *machine)
         error_report("Could not find LPAR firmware '%s'", bios_name);
         exit(1);
     }
-    fw_size = load_image_targphys(filename, 0, FW_MAX_SIZE);
-    if (fw_size <= 0) {
-        error_report("Could not load LPAR firmware '%s'", filename);
-        exit(1);
+    fw_size = load_elf(filename, NULL,
+                              NULL, NULL, NULL,
+                              &spapr->fw_addr, NULL, NULL, 1,
+                              PPC_ELF_MACHINE,
+                              0, 0);
+    if (fw_size == ELF_LOAD_NOT_ELF) {
+        fw_size = load_image_targphys(filename, 0, FW_MAX_SIZE);
+        if (fw_size <= 0) {
+            error_report("Could not load LPAR firmware '%s'", filename);
+            exit(1);
+        }
     }
-    g_free(filename);
 
     /* FIXME: Should register things through the MachineState's qdev
      * interface, this is a legacy from the sPAPREnvironment structure
