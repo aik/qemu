@@ -29,11 +29,14 @@ static int prom_handle(struct prom_args *pargs)
     /* rtas-size is set by QEMU depending of FWNMI support */
     ci_getprop(rtas, "rtas-size", &rtassize, sizeof(rtassize));
     if (rtassize < hv_rtas_size) {
+        printk("Error: %d bytes not enough space for RTAS, need %d\n",
+               rtassize, hv_rtas_size);
         return -1;
     }
 
     rtasbase = (void *)(unsigned long) pargs->args[2];
 
+    printk("*** instantiate-rtas: %x..%x\n", rtasbase, rtasbase + rtassize - 1);
     memcpy(rtasbase, hv_rtas, hv_rtas_size);
     pargs->args[pargs->nargs] = 0;
     pargs->args[pargs->nargs + 1] = pargs->args[2];
