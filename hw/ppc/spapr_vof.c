@@ -48,6 +48,10 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
         _FDT(fdt_setprop_string(fdt, chosen, "bootpath", bootlist));
     }
 
+    //aliases = fdt_add_subnode(fdt, 0, "aliases"); <=== this destroys FDT!
+//    fdt_setprop_string(fdt, aliases, "scsi", "/vdevice/v-scsi@71000001");
+//    fdt_setprop_string(fdt, aliases, "disk", "/vdevice/v-scsi@71000001/disk@8000000000000000");
+
     /*
      * SLOF-less setup requires an open instance of stdout for early
      * kernel printk. By now all phandles are settled so we can open
@@ -58,6 +62,7 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
                                    stdout_path));
         _FDT(vof_client_open_store(fdt, spapr->vof, "/chosen", "stdin",
                                    stdout_path));
+//        fdt_setprop_string(fdt, aliases, "hvterm", stdout_path);
     }
 
     /*
