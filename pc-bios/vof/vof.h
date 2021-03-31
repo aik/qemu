@@ -28,6 +28,8 @@ void *memcpy(void *dest, const void *src, size_t n);
 int memcmp(const void *ptr1, const void *ptr2, size_t n);
 void *memmove(void *dest, const void *src, size_t n);
 void *memset(void *dest, int c, size_t size);
+int snprintf(char *buf, int len, const char *fmt, ...);
+int printk(const char *fmt, ...);
 
 /* CI wrappers */
 void ci_panic(const char *str);
