@@ -1668,6 +1668,8 @@ static void spapr_machine_reset(MachineState *machine)
         cpu_physical_memory_write(fdt_addr, fdt, fdt_totalsize(fdt));
     }
     qemu_fdt_dumpdtb(fdt, fdt_totalsize(fdt));
+    printf("+++Q+++ (%u) %s %u: my.boot.dtb\n", getpid(), __func__, __LINE__);
+    g_file_set_contents("my.boot.dtb", spapr->fdt_blob, spapr->fdt_size, NULL); 
 
     g_free(spapr->fdt_blob);
     spapr->fdt_size = fdt_totalsize(fdt);

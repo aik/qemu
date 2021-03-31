@@ -80,6 +80,21 @@ static void dump_ih(Vof *vof)
     g_hash_table_foreach(vof->of_instances, dump_ih_cb, NULL);
 }
 
+static void vof_claimed_dump(GArray *claimed)
+{
+    int i;
+    OfClaimed c;
+
+    if (trace_event_get_state(TRACE_VOF_CLAIMED) &&
+        qemu_loglevel_mask(LOG_TRACE)) {
+
+        for (i = 0; i < claimed->len; ++i) {
+            c = g_array_index(claimed, OfClaimed, i);
+            trace_vof_claimed(c.start, c.start + c.size, c.size);
+        }
+    }
+}
+
 static int readstr(hwaddr pa, char *buf, int size)
 {
     if (VOF_MEM_READ(pa, buf, size) != MEMTX_OK) {
@@ -120,6 +135,13 @@ static void split_path(const char *fullpath, char **node, char **unit,
         *node = g_strdup(fullpath);
         return;
     }
+//    if (strcmp("disk", fullpath) == 0) {
+//        fullpath = "/vdevice/v-scsi@71000001/disk@8000000000000000";
+//    }
+//    else if (strcmp("disk:0", fullpath) == 0) {
+//        fullpath = "/vdevice/v-scsi@71000001/disk@8000000000000000:0";
+//    }
+
 
     for (c = fullpath + strlen(fullpath) - 1; c > fullpath; --c) {
         if (*c == '/') {
@@ -152,6 +174,9 @@ static void split_path(const char *fullpath, char **node, char **unit,
     } else {
         *node = g_strdup(fullpath);
     }
+//    printf("+++Q+++ (%u) %s %u: %s => %s|%s|%s\n", getpid(), __func__, __LINE__,
+//        fullpath, *node, *unit, *part);
+
 }
 #endif
 
@@ -368,7 +393,13 @@ static uint32_t vof_getprop(const void *fdt, uint32_t nodeph, uint32_t pname,
         ret = -1;
     }
     trace_vof_getprop(nodeph, propname, ret, trval);
-
+#if 0
+    if (memcmp(propname, "available", 9)) {
+        printf("+++Q+++ (%u) %s %u: reading available\n", getpid(), __func__, __LINE__);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+        vof_claimed_dump(vof->claimed);
+    }
+#endif
     return ret;
 }
 
@@ -690,6 +721,9 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
             conf.blk = inst->blk;
             blkconf_blocksizes(&conf, NULL);
             inst->blk_physical_block_size = conf.physical_block_size;
+            //            if (part) {
+            //                inst->blk_off = 16384 * 512;
+            //            }
         } else if (ncstr && network_device_get_mac(inst->dev,
                                                    &inst->nicconf.macaddr)) {
             /*
@@ -718,6 +752,12 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
 trace_exit:
     trace_vof_open(path, inst ? inst->phandle : 0, ret);
 
+    printf("+++Q+++ (%u) %s %u: inst=%lx dev=%lx blk=%lx nic=%lx\n", getpid(), __func__, __LINE__,
+            (unsigned long) inst,
+            inst ? (unsigned long) inst->dev:0,
+            inst ? (unsigned long) inst->blk:0,
+            inst ? (unsigned long) inst->nic:0
+            );
     return ret;
 }
 
@@ -924,21 +964,6 @@ static uint32_t vof_seek(Vof *vof, uint32_t ihandle, uint32_t hi, uint32_t lo)
     }
 
     return ret;
-}
-
-static void vof_claimed_dump(GArray *claimed)
-{
-    int i;
-    OfClaimed c;
-
-    if (trace_event_get_state(TRACE_VOF_CLAIMED) &&
-        qemu_loglevel_mask(LOG_TRACE)) {
-
-        for (i = 0; i < claimed->len; ++i) {
-            c = g_array_index(claimed, OfClaimed, i);
-            trace_vof_claimed(c.start, c.start + c.size, c.size);
-        }
-    }
 }
 
 static bool vof_claim_avail(GArray *claimed, uint64_t virt, uint64_t size)
@@ -1195,6 +1220,9 @@ static uint32_t vof_call_interpret(uint32_t cmdaddr, uint32_t param1,
     return ret;
 }
 
+void qmp_pmemsave(int64_t addr, int64_t size, const char *filename,
+                  Error **errp);
+
 static void vof_quiesce(MachineState *ms, void *fdt, Vof *vof)
 {
     Object *vmo = object_dynamic_cast(OBJECT(ms), TYPE_VOF_MACHINE_IF);
@@ -1213,6 +1241,10 @@ static void vof_quiesce(MachineState *ms, void *fdt, Vof *vof)
 
     vof_claimed_dump(vof->claimed);
     vof->quiesced = true;
+
+    printf("+++Q+++ (%u) %s %u: my.of.quiesce.dtb\n", getpid(), __func__, __LINE__);
+    g_file_set_contents("my.of.quiesce.dtb", fdt, fdt_totalsize(fdt), NULL); 
+//    qmp_pmemsave(0, 4ULL<<30, "my.guest.ram", NULL);
 }
 
 static uint32_t vof_client_handle(MachineState *ms, void *fdt, Vof *vof,
