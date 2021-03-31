@@ -1112,6 +1112,8 @@ static uint32_t vof_client_handle(MachineState *ms, void *fdt, Vof *vof,
 
     if (cmpserv("finddevice", 1, 1)) {
         ret = vof_finddevice(fdt, args[0]);
+//    } else if (cmpserv("canon", 3, 1)) {
+//        ret = vof_canon(fdt, args[0], args[1], args[2]);
     } else if (cmpserv("getprop", 4, 1)) {
         ret = vof_getprop(fdt, args[0], args[1], args[2], args[3]);
     } else if (cmpserv("getproplen", 2, 1)) {
