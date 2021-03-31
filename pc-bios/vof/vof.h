@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #include <stdarg.h>
+//#include <stdint.h>
 
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
@@ -15,6 +16,11 @@ typedef unsigned long ihandle;
 typedef unsigned long phandle;
 typedef int size_t;
 typedef void client(void);
+
+//#include "libelf.h"
+
+#define __stringify(x)	#x
+#define MYLOC(l)	("--line=" __stringify(l))
 
 /* globals */
 extern void _prom_entry(void); /* OF CI entry point (i.e. this firmware) */
@@ -32,6 +38,7 @@ int snprintf(char *buf, int len, const char *fmt, ...);
 int printk(const char *fmt, ...);
 
 /* CI wrappers */
+//void ci_init(void);
 void ci_panic(const char *str);
 ihandle ci_open(const char *path);
 void ci_close(ihandle ih);
