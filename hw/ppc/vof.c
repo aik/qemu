@@ -28,6 +28,7 @@
 #include <libfdt.h>
 #include "hw/block/block.h"
 #include "sysemu/block-backend.h"
+#include "net/net.h"
 
 /*
  * OF 1275 "nextprop" description suggests is it 32 bytes max but
@@ -46,6 +47,13 @@ typedef struct {
     uint64_t size;
 } OfClaimed;
 
+typedef uint8_t OfNetBuffer[2048];
+typedef struct {
+    int head, tail, used;
+    OfNetBuffer b[32];
+} OfNetBuffers;
+
+
 typedef struct {
     char *path; /* the path used to open the instance */
     uint32_t phandle;
@@ -54,6 +62,10 @@ typedef struct {
     BlockBackend *blk;
     uint64_t blk_pos;
     uint16_t blk_physical_block_size;
+    NICState *nic;
+    NICConf nicconf;
+    OfNetBuffers *netbufs;
+    NetClientState *ncpeer;
     char *params;
 } OfInstance;
 
@@ -547,6 +559,80 @@ static DeviceState *of_client_find_qom_dev(BusState *bus, const char *path,
     return NULL;
 }
 
+static bool network_device_get_mac(DeviceState *qdev, MACAddr *mac)
+{
+    const char *macstr;
+
+    macstr = object_property_get_str(OBJECT(qdev), "mac", NULL);
+    if (!macstr) {
+        return false;
+    }
+
+    return sscanf(macstr, "%02hhx:%02hhx:%02hhx:%02hhx:%02hhx:%02hhx",
+                  &mac->a[0], &mac->a[1], &mac->a[2],
+                  &mac->a[3], &mac->a[4], &mac->a[5]) == 6;
+}
+
+static bool of_client_net_can_receive(NetClientState *nc)
+{
+    OfInstance *inst = qemu_get_nic_opaque(nc);
+    OfNetBuffers *nb = inst->netbufs;
+
+ //   printf("+++Q+++ (%u) %s %u: Can receive? %d %ld\n", getpid(), __func__, __LINE__,
+ //               nb->used, ARRAY_SIZE(nb->b));
+    return nb->used < ARRAY_SIZE(nb->b);
+}
+
+static ssize_t of_client_net_receive(NetClientState *nc, const uint8_t *buf,
+                                     size_t size)
+{
+    OfInstance *inst = qemu_get_nic_opaque(nc);
+    OfNetBuffers *nb = inst->netbufs;
+    int next;
+
+    next = (nb->head + 1) % ARRAY_SIZE(nb->b);
+    g_assert(next != nb->tail);
+    g_assert(size <= ARRAY_SIZE(nb->b[0]));
+
+    memcpy(nb->b[next], buf, size);
+    nb->head = next;
+    ++nb->used;
+//    printf("+++Q+++ (%u) %s %u: netreceiving %ld, %d..%d used=%d\n", getpid(), __func__, __LINE__,
+//                size, nb->tail, nb->head, nb->used);
+
+    return size;
+}
+
+static ssize_t vof_net_read(OfInstance *inst, uint8_t *buf, size_t size)
+{
+    OfNetBuffers *nb = inst->netbufs;
+
+    if (!nb->used) {
+        return 0;
+    }
+    g_assert(nb->head != nb->tail);
+    memcpy(buf, nb->b[nb->tail], size);
+    nb->tail = (nb->tail + 1) % ARRAY_SIZE(nb->b);
+    --nb->used;
+//    printf("+++Q+++ (%u) %s %u: reading %ld, %d..%d used=%d\n", getpid(), __func__, __LINE__,
+ //               size, nb->tail, nb->head, nb->used);
+
+    return size;
+}
+
+static ssize_t vof_net_write(OfInstance *inst, uint8_t *buf, size_t size)
+{
+//  printf("+++Q+++ (%u) %s %u: sending %ld\n", getpid(), __func__, __LINE__, size);
+    return qemu_send_packet(qemu_get_queue(inst->nic), buf, size);
+}
+
+static NetClientInfo of_client_net_info = {
+    .type = NET_CLIENT_DRIVER_NIC,
+    .size = sizeof(NICState),
+    .can_receive = of_client_net_can_receive,
+    .receive = of_client_net_receive,
+};
+
 static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
 {
     uint32_t ret = -1;
@@ -584,6 +670,9 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
         const char *blkstr = object_property_get_str(OBJECT(inst->dev),
                                                      "drive", NULL);
 
+        const char *ncstr = object_property_get_str(OBJECT(inst->dev),
+                                                    "netdev", NULL);
+
         if (cdevstr) {
             Chardev *cdev = qemu_chr_find(cdevstr);
 
@@ -601,6 +690,28 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
             conf.blk = inst->blk;
             blkconf_blocksizes(&conf, NULL);
             inst->blk_physical_block_size = conf.physical_block_size;
+        } else if (ncstr && network_device_get_mac(inst->dev,
+                                                   &inst->nicconf.macaddr)) {
+            /*
+             * We already have a NIC hooked to a netdev bachend. To bypass
+             * the NIC, we temporarily replace the netdev's peer to our
+             * OF NIC and revert it back when the instance is closed.
+             */
+            inst->nicconf.peers.ncs[0] = qemu_find_netdev(ncstr);
+            if (inst->nicconf.peers.ncs[0]) {
+                inst->nicconf.peers.queues = 1;
+                inst->ncpeer = inst->nicconf.peers.ncs[0]->peer;
+                qemu_purge_queued_packets(inst->ncpeer);
+                inst->nicconf.peers.ncs[0]->peer = NULL;
+                inst->nic = qemu_new_nic(&of_client_net_info, &inst->nicconf,
+                                         "OF1275-CI", "ofnet", inst);
+                qemu_purge_queued_packets(inst->nicconf.peers.ncs[0]);
+            }
+            if (inst->nic) {
+                qemu_format_nic_info_str(qemu_get_queue(inst->nic),
+                                         inst->nicconf.macaddr.a);
+                inst->netbufs = g_malloc0(sizeof(inst->netbufs[0]));
+            }
         }
     }
 
@@ -729,6 +840,9 @@ static uint32_t vof_write(Vof *vof, uint32_t ihandle, uint32_t buf,
 
         if (inst->cbe) {
             qemu_chr_fe_write_all(inst->cbe, (uint8_t *) tmp, cb);
+        } else if (inst->nic) {
+            if (cb != vof_net_write(inst, (uint8_t *) tmp, cb))
+                printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         }
         if (inst->blk) {
             /* Do not allow writing to the boot disk, just a precation */
@@ -780,6 +894,13 @@ static uint32_t vof_read(Vof *vof, uint32_t ihandle, uint32_t bufaddr,
                 if (rc > 0) {
                     inst->blk_pos += rc;
                 }
+            } else if (inst->nic) {
+                int rc = vof_net_read(inst, buf, len);
+
+                if (rc > 0) {
+                    ret = rc;
+                }
+                trace_vof_net_read(ihandle, len, rc);
             }
         }
     }
@@ -1236,6 +1357,15 @@ static void vof_instance_free(gpointer data)
 {
     OfInstance *inst = (OfInstance *)data;
 
+    if (inst->ncpeer) {
+        qemu_purge_queued_packets(inst->nicconf.peers.ncs[0]->peer);
+        inst->nicconf.peers.ncs[0]->peer = inst->ncpeer;
+        qemu_purge_queued_packets(inst->nicconf.peers.ncs[0]->peer);
+
+        qemu_del_nic(inst->nic);
+    }
+    g_free(inst->netbufs);
+
     g_free(inst->params);
     g_free(inst->path);
     g_free(inst);
@@ -1287,6 +1417,30 @@ void vof_build_dt(void *fdt, Vof *vof)
             int disk_node_off = fdt_add_subnode(fdt, offset, "disk");
 
             fdt_setprop_string(fdt, disk_node_off, "device_type", "block");
+        } else if (strncmp(nodename, "ethernet@", 9) == 0 ||
+                   strncmp(nodename, "l-lan@", 6) == 0) {
+
+            char devpath[1024];
+            DeviceState *qdev;
+            MACAddr mac;
+
+            if (fdt_get_path(fdt, offset, devpath, sizeof(devpath) - 1) < 0) {
+                continue;
+            }
+
+            qdev = of_client_find_qom_dev(sysbus_get_default(), devpath, strlen(devpath));
+            if (!qdev) {
+                continue;
+            }
+            if (network_device_get_mac(qdev, &mac)) {
+                fdt_setprop(fdt, offset, "local-mac-address", mac.a,
+                            sizeof(mac));
+            }
+            fdt_setprop_string(fdt, offset, "device_type", "network");
+            fdt_setprop_cell(fdt, offset, "max-frame-size", 1024);
+            // "max-frame-size" => len=-1 []
+            // "mac-address" => len=-1 []
+            // "local-mac-address" => len=-1 []
         }
     }
 
