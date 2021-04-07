@@ -57,6 +57,17 @@ typedef struct {
     char *params;
 } OfInstance;
 
+static void dump_ih_cb(gpointer key, gpointer value, gpointer user_data)
+{
+    printf("+++Q+++ (%u) %s %u: %lx %lx\n", getpid(), __func__, __LINE__,
+            (unsigned long) key,  (unsigned long) value);
+}
+
+static void dump_ih(Vof *vof)
+{
+    g_hash_table_foreach(vof->of_instances, dump_ih_cb, NULL);
+}
+
 static int readstr(hwaddr pa, char *buf, int size)
 {
     if (VOF_MEM_READ(pa, buf, size) != MEMTX_OK) {
@@ -620,6 +631,7 @@ static uint32_t vof_open(void *fdt, Vof *vof, uint32_t pathaddr)
 {
     char path[VOF_MAX_PATH];
     int offset;
+    uint32_t ret;
 
     if (readstr(pathaddr, path, sizeof(path))) {
         return -1;
@@ -631,11 +643,14 @@ static uint32_t vof_open(void *fdt, Vof *vof, uint32_t pathaddr)
         return offset;
     }
 
-    return vof_do_open(fdt, vof, offset, path);
+    ret = vof_do_open(fdt, vof, offset, path);
+    dump_ih(vof);
+    return ret;
 }
 
 static void vof_close(Vof *vof, uint32_t ihandle)
 {
+    dump_ih(vof);
     if (!g_hash_table_remove(vof->of_instances, GINT_TO_POINTER(ihandle))) {
         trace_vof_error_unknown_ihandle_close(ihandle);
     }
