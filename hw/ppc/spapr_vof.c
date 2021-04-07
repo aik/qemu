@@ -53,9 +53,19 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
     }
 
     _FDT(chosen = fdt_path_offset(fdt, "/chosen"));
+//    _FDT(fdt_setprop_string(fdt, chosen, "bootargs",
+//                            spapr->vof.bootargs ? : ""));
     if (bootlist) {
         _FDT(fdt_setprop_string(fdt, chosen, "bootpath", bootlist));
     }
+
+    /*
+    _FDT(fdt_setprop_cell(fdt, chosen, "cpu",
+                          spapr_of_client_open(spapr,
+                                               "/cpus/PowerPC,POWER8@0")));
+    _FDT(fdt_setprop_cell(fdt, chosen, "memory", memph));
+    _FDT(fdt_setprop_cell(fdt, chosen, "mmu", memph));
+    */
 }
 
 void spapr_vof_reset(SpaprMachineState *spapr, void *fdt,
