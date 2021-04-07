@@ -17,5 +17,6 @@ void entry_c(void)
     uint64_t initrd = r3, initrdsize = r4;
 
     boot_from_memory(initrd, initrdsize);
+    boot_block();
     ci_panic("*** No boot target ***\n");
 }

@@ -31,6 +31,8 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
 {
     char *stdout_path = spapr_vio_stdout_path(spapr->vio_bus);
     int chosen;
+    size_t cb = 0;
+    char *bootlist = get_boot_devices_list(&cb);
 
     vof_build_dt(fdt, spapr->vof);
 
@@ -48,6 +50,11 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
                                    stdout_path));
         _FDT(vof_client_open_store(fdt, spapr->vof, "/chosen", "stdin",
                                    stdout_path));
+    }
+
+    _FDT(chosen = fdt_path_offset(fdt, "/chosen"));
+    if (bootlist) {
+        _FDT(fdt_setprop_string(fdt, chosen, "bootpath", bootlist));
     }
 }
 
