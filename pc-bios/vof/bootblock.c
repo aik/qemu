@@ -210,6 +210,10 @@ static void try_boot_block_device(ihandle blk, const char *path)
         return;
     }
 
+    ci_stdout("** Booting from ");
+    ci_stdout(path);
+    ci_stdout("\n");
+    ci_stdout("AIKDBG\n");
     do_boot(elf_addr, 0, 0);
 }
 

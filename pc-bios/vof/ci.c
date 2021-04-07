@@ -77,6 +77,7 @@ static int call_ci(const char *service, int nargs, int nret, ...)
 
 void ci_panic(const char *str)
 {
+    ci_stdout(str);
     call_ci("exit", 0, 0);
 }
 
@@ -90,6 +91,11 @@ void ci_close(ihandle ih)
     call_ci("close", 1, 0, ih);
 }
 
+uint32_t ci_block_size(ihandle ih)
+{
+    return 512;
+}
+
 uint32_t ci_seek(ihandle ih, uint64_t offset)
 {
     return call_ci("seek", 3, 1, ih, (prom_arg_t)(offset >> 32),
@@ -101,6 +107,11 @@ uint32_t ci_read(ihandle ih, void *buf, int len)
     return call_ci("read", 3, 1, ih, buf, len);
 }
 
+uint32_t ci_write(ihandle ih, const void *buf, int len)
+{
+    return call_ci("write", 3, 1, ih, buf, len);
+}
+
 phandle ci_finddevice(const char *path)
 {
     return call_ci("finddevice", 1, 1, path);
@@ -109,6 +120,23 @@ phandle ci_finddevice(const char *path)
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len)
 {
     return call_ci("getprop", 4, 1, ph, propname, prop, len);
+}
+
+void ci_stdoutn(const char *buf, int len)
+{
+    static ihandle istdout;
+
+    if (!istdout) {
+        phandle chosen = ci_finddevice("/chosen");
+
+        ci_getprop(chosen, "stdout", &istdout, sizeof(istdout));
+    }
+    ci_write(istdout, buf, len);
+}
+
+void ci_stdout(const char *buf)
+{
+    ci_stdoutn(buf, strlen(buf));
 }
 
 void *ci_claim(void *virt, uint32_t size, uint32_t align)
