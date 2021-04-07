@@ -16,6 +16,7 @@ void entry_c(void)
     register unsigned long r5 __asm__("r5");
     uint64_t initrd = r3, initrdsize = r4;
 
+    ci_stdout("*** Virtual Open Firmware ***\n");
     boot_from_memory(initrd, initrdsize);
     boot_block();
     ci_panic("*** No boot target ***\n");
