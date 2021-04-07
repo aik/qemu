@@ -33,12 +33,16 @@ void *memset(void *dest, int c, size_t size);
 void ci_panic(const char *str);
 ihandle ci_open(const char *path);
 void ci_close(ihandle ih);
+uint32_t ci_block_size(ihandle ih);
 uint32_t ci_seek(ihandle ih, uint64_t offset);
 uint32_t ci_read(ihandle ih, void *buf, int len);
+uint32_t ci_write(ihandle ih, const void *buf, int len);
 void *ci_claim(void *virt, uint32_t size, uint32_t align);
 uint32_t ci_release(void *virt, uint32_t size);
 phandle ci_finddevice(const char *path);
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len);
+void ci_stdout(const char *buf);
+void ci_stdoutn(const char *buf, int len);
 
 /* ELF */
 int elf_load_file(void *file_addr, uint32_t *entry,
