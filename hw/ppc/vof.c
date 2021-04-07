@@ -1255,6 +1255,18 @@ void vof_build_dt(void *fdt, Vof *vof)
     int offset, proplen = 0;
     const void *prop;
 
+    /* Add options now, doing it at the end of this __func__ breaks it :-/ */
+    offset = fdt_add_subnode(fdt, 0, "options");
+    if (offset > 0) {
+        struct winsize ws;
+
+        if (ioctl(1, TIOCGWINSZ, &ws) != -1) {
+            _FDT(fdt_setprop_cell(fdt, offset, "screen-#columns", ws.ws_col));
+            _FDT(fdt_setprop_cell(fdt, offset, "screen-#rows", ws.ws_row));
+        }
+        _FDT(fdt_setprop_cell(fdt, offset, "real-mode?", 1));
+    }
+
     /* Add "disk" nodes to SCSI hosts */
     for (offset = fdt_next_node(fdt, -1, NULL);
          offset >= 0;

@@ -59,6 +59,14 @@ void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
         _FDT(vof_client_open_store(fdt, spapr->vof, "/chosen", "stdin",
                                    stdout_path));
     }
+
+    /*
+    _FDT(fdt_setprop_cell(fdt, chosen, "cpu",
+                          spapr_of_client_open(spapr,
+                                               "/cpus/PowerPC,POWER8@0")));
+    _FDT(fdt_setprop_cell(fdt, chosen, "memory", memph));
+    _FDT(fdt_setprop_cell(fdt, chosen, "mmu", memph));
+    */
 }
 
 void spapr_vof_reset(SpaprMachineState *spapr, void *fdt, Error **errp)
