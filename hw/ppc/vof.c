@@ -1017,21 +1017,46 @@ void vof_cleanup(Vof *vof)
 
 void vof_build_dt(void *fdt, Vof *vof)
 {
-    uint32_t phandle = fdt_get_max_phandle(fdt);
-    int offset, proplen = 0;
+    uint32_t phandle;
+    int i, offset, proplen = 0;
     const void *prop;
+    bool found = false;
+    GArray *phandles = g_array_new(false, false, sizeof(uint32_t));
 
-    /* Assign phandles to nodes without predefined phandles (like XICS/XIVE) */
+    /* Find all predefined phandles */
     for (offset = fdt_next_node(fdt, -1, NULL);
          offset >= 0;
          offset = fdt_next_node(fdt, offset, NULL)) {
         prop = fdt_getprop(fdt, offset, "phandle", &proplen);
+        if (prop && proplen == sizeof(uint32_t)) {
+            phandle = fdt32_ld(prop);
+            g_array_append_val(phandles, phandle);
+        }
+    }
+
+    /* Assign phandles skipping the predefined ones */
+    for (offset = fdt_next_node(fdt, -1, NULL), phandle = 1;
+         offset >= 0;
+         offset = fdt_next_node(fdt, offset, NULL), ++phandle) {
+        prop = fdt_getprop(fdt, offset, "phandle", &proplen);
         if (prop) {
             continue;
         }
-        ++phandle;
+        /* Check if the current phandle is not allocated already */
+        for ( ; ; ++phandle) {
+            for (i = 0, found = false; i < phandles->len; ++i) {
+                if (phandle == g_array_index(phandles, uint32_t, i)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                break;
+            }
+        }
         _FDT(fdt_setprop_cell(fdt, offset, "phandle", phandle));
     }
+    g_array_unref(phandles);
 
     vof_dt_memory_available(fdt, vof->claimed, vof->claimed_base);
 }
