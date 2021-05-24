@@ -17,6 +17,9 @@
 	. = 0x100 /* Do exactly as SLOF does */
 
 ENTRY(_start)
+#   Uncomment to clear MSR to force 32bit (no MSR_SF)
+#	LOAD32(%r31, 0)
+#	mtmsrd %r31,0
 	LOAD32(2, __toc_start)
 	b entry_c
 
