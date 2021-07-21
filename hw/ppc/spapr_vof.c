@@ -30,18 +30,22 @@ target_ulong spapr_h_vof_client(PowerPCCPU *cpu, SpaprMachineState *spapr,
 void spapr_vof_client_dt_finalize(SpaprMachineState *spapr, void *fdt)
 {
     char *stdout_path = spapr_vio_stdout_path(spapr->vio_bus);
+    int chosen;
+    size_t cb = 0;
+    char *bootlist = get_boot_devices_list(&cb);
 
     vof_build_dt(fdt, spapr->vof);
 
+    _FDT(chosen = fdt_path_offset(fdt, "/chosen"));
     if (spapr->vof->bootargs) {
-        int chosen;
-
-        _FDT(chosen = fdt_path_offset(fdt, "/chosen"));
         /*
          * If the client did not change "bootargs", spapr_dt_chosen() must have
          * stored machine->kernel_cmdline in it before getting here.
          */
         _FDT(fdt_setprop_string(fdt, chosen, "bootargs", spapr->vof->bootargs));
+    }
+    if (bootlist) {
+        _FDT(fdt_setprop_string(fdt, chosen, "bootpath", bootlist));
     }
 
     /*

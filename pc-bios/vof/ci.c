@@ -80,6 +80,27 @@ void ci_panic(const char *str)
     call_ci("exit", 0, 0);
 }
 
+ihandle ci_open(const char *path)
+{
+    return call_ci("open", 1, 1, path);
+}
+
+void ci_close(ihandle ih)
+{
+    call_ci("close", 1, 0, ih);
+}
+
+uint32_t ci_seek(ihandle ih, uint64_t offset)
+{
+    return call_ci("seek", 3, 1, ih, (prom_arg_t)(offset >> 32),
+                   (prom_arg_t)(offset & 0xFFFFFFFFUL));
+}
+
+uint32_t ci_read(ihandle ih, void *buf, int len)
+{
+    return call_ci("read", 3, 1, ih, buf, len);
+}
+
 phandle ci_finddevice(const char *path)
 {
     return call_ci("finddevice", 1, 1, path);
@@ -88,4 +109,16 @@ phandle ci_finddevice(const char *path)
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len)
 {
     return call_ci("getprop", 4, 1, ph, propname, prop, len);
+}
+
+void *ci_claim(void *virt, uint32_t size, uint32_t align)
+{
+    uint32_t ret = call_ci("claim", 3, 1, ADDR(virt), size, align);
+
+    return (void *) (unsigned long) ret;
+}
+
+uint32_t ci_release(void *virt, uint32_t size)
+{
+    return call_ci("release", 2, 1, ADDR(virt), size);
 }

@@ -96,6 +96,10 @@ vof_write(uint32_t ih, unsigned cb, const char *msg) "ih=0x%x [%u] \"%s\""
 vof_read(uint32_t ih, uint32_t ret, uint32_t len) "ih=0x%x %u/%u"
 vof_avail(uint64_t start, uint64_t end, uint64_t size) "0x%"PRIx64"..0x%"PRIx64" size=0x%"PRIx64
 vof_claimed(uint64_t start, uint64_t end, uint64_t size) "0x%"PRIx64"..0x%"PRIx64" size=0x%"PRIx64
+vof_blk_write(uint32_t ih, uint32_t len) "0x%x => len=%d"
+vof_blk_read(uint32_t ih, uint64_t pos, uint32_t len, uint32_t ret) "ih=0x%x @0x%"PRIx64" size=%d => %d"
+vof_blk_seek(uint32_t ih, uint64_t pos, uint32_t ret) "ih=0x%x 0x%"PRIx64" => %d"
+vof_blk_bootloader_read(uint64_t offset, uint64_t size) "0x%"PRIx64" size=0x%"PRIx64
 
 # ppc.c
 ppc_tb_adjust(uint64_t offs1, uint64_t offs2, int64_t diff, int64_t seconds) "adjusted from 0x%"PRIx64" to 0x%"PRIx64", diff %"PRId64" (%"PRId64"s)"

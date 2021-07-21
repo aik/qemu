@@ -13,7 +13,7 @@ OBJCOPY = $(CROSS)objcopy
 %.o: %.c
 	$(CC) -m32 -mbig-endian -mcpu=power4 -c -fno-stack-protector -o $@ $<
 
-vof.elf: entry.o main.o ci.o bootmem.o libc.o
+vof.elf: entry.o main.o ci.o bootmem.o libc.o bootblock.o elf32.o
 	$(LD) -nostdlib -e_start -Tvof.lds -EB -o $@ $^
 
 %.bin: %.elf

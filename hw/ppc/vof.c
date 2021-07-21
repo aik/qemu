@@ -27,6 +27,8 @@
 #include "hw/ppc/spapr_vio.h"
 
 #include <libfdt.h>
+#include "hw/block/block.h"
+#include "sysemu/block-backend.h"
 
 /*
  * OF 1275 "nextprop" description suggests is it 32 bytes max but
@@ -50,6 +52,9 @@ typedef struct {
     uint32_t phandle;
     DeviceState *dev;
     CharBackend *cbe;
+    BlockBackend *blk;
+    uint64_t blk_pos;
+    uint16_t blk_physical_block_size;
 } OfInstance;
 
 static DeviceState *find_qdev(BusState *bus, const char *path, int pathlen)
@@ -158,10 +163,11 @@ static int phandle_to_path(const void *fdt, uint32_t ph, char *buf, int len)
     return get_path(fdt, ret, buf, len);
 }
 
-static int path_offset(const void *fdt, const char *path)
+static int path_offset(const void *fdt, const char *path, int *pathlen)
 {
     g_autofree char *p = NULL;
-    char *at;
+    char *at, *lastat = NULL;
+    int rc;
 
     /*
      * https://www.devicetree.org/open-firmware/bindings/ppc/release/ppc-2_1.html#HDR16
@@ -171,29 +177,39 @@ static int path_offset(const void *fdt, const char *path)
      * suppressing leading zeros".
      */
     p = g_strdup(path);
-    for (at = strchr(p, '@'); at && *at; ) {
+    for (at = lastat = strchr(p, '@'); at && *at; ) {
             if (*at == '/') {
                 at = strchr(at, '@');
+                lastat = at;
             } else {
                 *at = tolower(*at);
                 ++at;
             }
     }
 
-    return fdt_path_offset(fdt, p);
+    rc = fdt_path_offset(fdt, p);
+    if (rc >= 0 || !lastat) {
+        *pathlen = strlen(p);
+    } else {
+        rc = fdt_path_offset_namelen(fdt, p, lastat - p);
+        if (rc >= 0) {
+            *pathlen = lastat - p;
+        }
+    }
+    return rc;
 }
 
 static uint32_t vof_finddevice(const void *fdt, uint32_t nodeaddr)
 {
     char fullnode[VOF_MAX_PATH];
     uint32_t ret = PROM_ERROR;
-    int offset;
+    int offset, pathlen = 0;
 
     if (readstr(nodeaddr, fullnode, sizeof(fullnode))) {
         return (uint32_t) ret;
     }
 
-    offset = path_offset(fdt, fullnode);
+    offset = path_offset(fdt, fullnode, &pathlen);
     if (offset >= 0) {
         ret = fdt_get_phandle(fdt, offset);
     }
@@ -458,11 +474,17 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
 {
     uint32_t ret = PROM_ERROR;
     int pathlen = strlen(path);
+    char *params;
     OfInstance *inst = NULL;
 
     if (vof->of_instance_last == 0xFFFFFFFF) {
         /* We do not recycle ihandles yet */
         goto trace_exit;
+    }
+
+    params = memrchr(path, ':', pathlen);
+    if (params) {
+        pathlen = params - path;
     }
 
     inst = g_new0(OfInstance, 1);
@@ -480,6 +502,8 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
     if (inst->dev) {
         const char *cdevstr = object_property_get_str(OBJECT(inst->dev),
                                                       "chardev", NULL);
+        const char *blkstr = object_property_get_str(OBJECT(inst->dev),
+                                                     "drive", NULL);
 
         if (cdevstr) {
             Chardev *cdev = qemu_chr_find(cdevstr);
@@ -487,6 +511,17 @@ static uint32_t vof_do_open(void *fdt, Vof *vof, int offset, const char *path)
             if (cdev) {
                 inst->cbe = cdev->be;
             }
+        } else if (blkstr) {
+            BlockConf conf = { 0 };
+
+            if (params && params[0] && strcmp(params, "0")) {
+                error_report("Warning: only :0 is supported for disks");
+            }
+
+            inst->blk = blk_by_name(blkstr);
+            conf.blk = inst->blk;
+            blkconf_blocksizes(&conf, NULL);
+            inst->blk_physical_block_size = conf.physical_block_size;
         }
     }
 
@@ -516,13 +551,13 @@ uint32_t vof_client_open_store(void *fdt, Vof *vof, const char *nodename,
 static uint32_t vof_open(void *fdt, Vof *vof, uint32_t pathaddr)
 {
     char path[VOF_MAX_PATH];
-    int offset;
+    int offset, pathlen = 0;
 
     if (readstr(pathaddr, path, sizeof(path))) {
         return PROM_ERROR;
     }
 
-    offset = path_offset(fdt, path);
+    offset = path_offset(fdt, path, &pathlen);
     if (offset < 0) {
         trace_vof_error_unknown_path(path);
         return PROM_ERROR;
@@ -612,10 +647,18 @@ static uint32_t vof_write(Vof *vof, uint32_t ihandle, uint32_t buf,
         if (inst->cbe) {
             qemu_chr_fe_write_all(inst->cbe, (uint8_t *) tmp, cb);
         }
+        if (inst->blk) {
+            /* Do not allow writing to the boot disk */
+            len = PROM_ERROR;
+            trace_vof_blk_write(ihandle, len);
+        }
         if (trace_event_get_state(TRACE_VOF_WRITE) &&
             qemu_loglevel_mask(LOG_TRACE)) {
             tmp[cb] = '\0';
             trace_vof_write(ihandle, cb, tmp);
+        }
+        if (len == PROM_ERROR) {
+            break;
         }
     }
 
@@ -628,6 +671,7 @@ static uint32_t vof_read(Vof *vof, uint32_t ihandle, uint32_t buf,
     uint32_t ret = len;
     hwaddr xlat = 0, xlen = len;
     MemoryRegion *mr;
+    uint8_t *tmp;
     OfInstance *inst = (OfInstance *)
         g_hash_table_lookup(vof->of_instances, GINT_TO_POINTER(ihandle));
 
@@ -643,18 +687,45 @@ static uint32_t vof_read(Vof *vof, uint32_t ihandle, uint32_t buf,
         return PROM_ERROR;
     }
 
+    tmp = memory_region_get_ram_ptr(mr) + xlat;
     if (inst->cbe) {
         SpaprVioDevice *sdev;
 
         sdev = (SpaprVioDevice *) object_dynamic_cast(OBJECT(inst->dev),
                                                       TYPE_VIO_SPAPR_DEVICE);
         if (sdev) {
-            uint8_t *tmp = memory_region_get_ram_ptr(mr) + xlat;
-
             ret = vty_getchars(sdev, tmp, MIN(len, xlen));
+        }
+    } else if (inst->blk) {
+        int rc = blk_pread(inst->blk, inst->blk_pos, tmp, MIN(len, xlen));
+
+        if (rc > 0) {
+            ret = rc;
+        }
+        trace_vof_blk_read(ihandle, inst->blk_pos, len, ret);
+        if (rc > 0) {
+            inst->blk_pos += rc;
         }
     }
     trace_vof_read(ihandle, ret, len);
+
+    return ret;
+}
+
+static uint32_t vof_seek(Vof *vof, uint32_t ihandle, uint32_t hi, uint32_t lo)
+{
+    uint32_t ret = PROM_ERROR;
+    uint64_t pos = ((uint64_t) hi << 32) | lo;
+    OfInstance *inst = (OfInstance *)
+        g_hash_table_lookup(vof->of_instances, GINT_TO_POINTER(ihandle));
+
+    if (inst) {
+        if (inst->blk) {
+            inst->blk_pos = pos;
+            ret = 1;
+            trace_vof_blk_seek(ihandle, pos, ret);
+        }
+    }
 
     return ret;
 }
@@ -891,6 +962,21 @@ static uint32_t vof_call_method(MachineState *ms, Vof *vof, uint32_t methodaddr,
             ret = 0;
             *ret2 = param1; /* rtas-base */
         }
+    } else if (inst->blk) {
+        if (strcmp(method, "block-size") == 0) {
+            ret = 0;
+            *ret2 = inst->blk_physical_block_size;
+        } else if (strcmp(method, "#blocks") == 0) {
+            ret = 0;
+            *ret2 = blk_getlength(inst->blk) / inst->blk_physical_block_size;
+        }
+     } else if (inst->dev) {
+        if (strcmp(method, "vscsi-report-luns") == 0) {
+            /* TODO: Not implemented yet, not clear when it is really needed */
+            ret = -1;
+            *ret2 = 1;
+        }
+
     } else {
         trace_vof_error_unknown_method(method);
     }
@@ -974,6 +1060,8 @@ static uint32_t vof_client_handle(MachineState *ms, void *fdt, Vof *vof,
         ret = vof_write(vof, args[0], args[1], args[2]);
     } else if (cmpserv("read", 3, 1)) {
         ret = vof_read(vof, args[0], args[1], args[2]);
+    } else if (cmpserv("seek", 3, 1)) {
+        ret = vof_seek(vof, args[0], args[1], args[2]);
     } else if (cmpserv("claim", 3, 1)) {
         uint64_t ret64 = vof_claim(vof, args[0], args[1], args[2]);
 
@@ -1115,6 +1203,20 @@ void vof_build_dt(void *fdt, Vof *vof)
     uint32_t phandle = fdt_get_max_phandle(fdt);
     int offset, proplen = 0;
     const void *prop;
+
+    /* Add "disk" nodes to SCSI hosts */
+    for (offset = fdt_next_node(fdt, -1, NULL);
+         offset >= 0;
+         offset = fdt_next_node(fdt, offset, NULL)) {
+
+        const char *nodename = fdt_get_name(fdt, offset, NULL);
+        if (strncmp(nodename, "scsi@", 5) == 0 ||
+            strncmp(nodename, "v-scsi@", 7) == 0) {
+            int disk_node_off = fdt_add_subnode(fdt, offset, "disk");
+
+            fdt_setprop_string(fdt, disk_node_off, "device_type", "block");
+        }
+    }
 
     /* Assign phandles to nodes without predefined phandles (like XICS/XIVE) */
     for (offset = fdt_next_node(fdt, -1, NULL);
