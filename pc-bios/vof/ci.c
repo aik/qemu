@@ -80,6 +80,11 @@ void ci_panic(const char *str)
     call_ci("exit", 0, 0);
 }
 
+void ci_prn(const char *str, unsigned long n1, unsigned long n2)
+{
+    call_ci("prn", 3, 0, str, n1, n2);
+}
+
 phandle ci_finddevice(const char *path)
 {
     return call_ci("finddevice", 1, 1, path);

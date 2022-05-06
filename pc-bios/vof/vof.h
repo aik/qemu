@@ -28,6 +28,7 @@ void *memmove(void *dest, const void *src, size_t n);
 void *memset(void *dest, int c, size_t size);
 
 /* CI wrappers */
+void ci_prn(const char *str, unsigned long n1, unsigned long n2);
 void ci_panic(const char *str);
 phandle ci_finddevice(const char *path);
 uint32_t ci_getprop(phandle ph, const char *propname, void *prop, int len);

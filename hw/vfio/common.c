@@ -169,6 +169,7 @@ int vfio_set_irq_signaling(VFIODevice *vbasedev, int index, int subindex,
 
     argsz = sizeof(*irq_set) + sizeof(*pfd);
 
+    printf("+++Q+++ (%u) %s %u: fd=%d\n", getpid(), __func__, __LINE__, fd);
     irq_set = g_malloc0(argsz);
     irq_set->argsz = argsz;
     irq_set->flags = VFIO_IRQ_SET_DATA_EVENTFD | action;

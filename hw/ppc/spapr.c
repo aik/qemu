@@ -1256,6 +1256,7 @@ static uint64_t translate_kernel_address(void *opaque, uint64_t addr)
 {
     SpaprMachineState *spapr = opaque;
 
+    printf("+++Q+++ (%u) %s %u: %lx\n", getpid(), __func__, __LINE__, addr);
     return (addr & 0x0fffffff) + spapr->kernel_addr;
 }
 

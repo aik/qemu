@@ -113,6 +113,7 @@ static target_ulong h_eoi(PowerPCCPU *cpu, SpaprMachineState *spapr,
 {
     target_ulong xirr = args[0];
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     CHECK_EMULATED_XICS_HCALL(spapr);
 
     icp_eoi(spapr_cpu_state(cpu)->icp, xirr);

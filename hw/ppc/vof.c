@@ -916,6 +916,10 @@ static uint32_t vof_client_handle(MachineState *ms, void *fdt, Vof *vof,
         ret = qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL);
     } else if (cmpserv("quiesce", 0, 0)) {
         vof_quiesce(ms, fdt, vof);
+    } else if (cmpserv("prn", 3, 0)) {
+        char msg[128];
+        readstr(args[0], msg, sizeof(msg));
+        printf("+++Q+++ (%u) %s %u: %s %x %x\n", getpid(), __func__, __LINE__, msg, args[1], args[2]);
     } else if (cmpserv("exit", 0, 0)) {
         error_report("Stopped as the VM requested \"exit\"");
         vm_stop(RUN_STATE_PAUSED);

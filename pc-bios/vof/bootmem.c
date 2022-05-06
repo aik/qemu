@@ -10,5 +10,7 @@ void boot_from_memory(uint64_t initrd, uint64_t initrdsize)
         return;
     }
 
+    ci_prn("printf1", (uint32_t) kern[0], (uint32_t) kern[1]);
     do_boot(kern[0], initrd, initrdsize);
+    //ci_prn("printf2", 0, 0);
 }

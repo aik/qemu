@@ -1705,6 +1705,7 @@ static target_ulong h_int_esb(PowerPCCPU *cpu,
     if (spapr_xive_in_kernel(xive)) {
         args[0] = kvmppc_xive_esb_rw(xsrc, lisn, offset, data,
                                      flags & SPAPR_XIVE_ESB_STORE);
+//        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     } else {
         mmio_addr = xive->vc_base + xive_source_esb_mgmt(xsrc, lisn) + offset;
 
@@ -1716,6 +1717,7 @@ static target_ulong h_int_esb(PowerPCCPU *cpu,
             return H_HARDWARE;
         }
         args[0] = (flags & SPAPR_XIVE_ESB_STORE) ? -1 : data;
+        //printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     }
     return H_SUCCESS;
 }

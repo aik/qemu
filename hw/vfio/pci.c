@@ -137,10 +137,15 @@ static void vfio_intx_enable_kvm(VFIOPCIDevice *vdev, Error **errp)
         goto fail;
     }
 
+    printf("+++Q+++ (%u) %s %u: unmask fds %d  rfd=%d\n", getpid(), __func__, __LINE__,
+        event_notifier_get_fd(&vdev->intx.unmask),
+        event_notifier_get_wfd(&vdev->intx.unmask)
+        );
     if (kvm_irqchip_add_irqfd_notifier_gsi(kvm_state,
                                            &vdev->intx.interrupt,
                                            &vdev->intx.unmask,
                                            vdev->intx.route.irq)) {
+        printf("+++Q+++ (%u) %s %u: %d\n", getpid(), __func__, __LINE__, errno);
         error_setg_errno(errp, errno, "failed to setup resample irqfd");
         goto fail_irqfd;
     }
@@ -152,6 +157,7 @@ static void vfio_intx_enable_kvm(VFIOPCIDevice *vdev, Error **errp)
         goto fail_vfio;
     }
 
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
     /* Let'em rip */
     vfio_unmask_single_irqindex(&vdev->vbasedev, VFIO_PCI_INTX_IRQ_INDEX);
 

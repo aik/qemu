@@ -285,11 +285,13 @@ static uint64_t xive_esb_rw(XiveSource *xsrc, int srcno, uint32_t offset,
         offset;
 
     if (write) {
+//        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         *addr = cpu_to_be64(data);
         return -1;
     } else {
         /* Prevent the compiler from optimizing away the load */
         volatile uint64_t value = be64_to_cpu(*addr);
+//        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         return value;
     }
 }
@@ -319,7 +321,9 @@ uint64_t kvmppc_xive_esb_rw(XiveSource *xsrc, int srcno, uint32_t offset,
     if (xive_source_irq_is_lsi(xsrc, srcno) &&
         offset == XIVE_ESB_LOAD_EOI) {
         xive_esb_read(xsrc, srcno, XIVE_ESB_SET_PQ_00);
+        printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
         if (xive_source_is_asserted(xsrc, srcno)) {
+            printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
             kvmppc_xive_esb_trigger(xsrc, srcno);
         }
         return 0;

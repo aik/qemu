@@ -2078,6 +2078,7 @@ static int kvm_irqchip_assign_irqfd(KVMState *s, EventNotifier *event,
         } else {
             irqfd.flags |= KVM_IRQFD_FLAG_RESAMPLE;
             irqfd.resamplefd = rfd;
+            printf("+++Q+++ (%u) %s %u: virq=%x resfd=%d\n", getpid(), __func__, __LINE__, virq, rfd);
         }
     } else if (!assign) {
         if (kvm_irqchip_is_split()) {
