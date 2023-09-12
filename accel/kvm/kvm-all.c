@@ -1432,6 +1432,9 @@ static int kvm_set_memory_attributes(hwaddr start, uint64_t size, uint64_t attr)
                      "with attr 0x%" PRIx64 " error '%s'",
                      start, size, attr, strerror(errno));
     }
+
+    trace_kvm_set_memory_attributes(start, size, attr);
+
     return r;
 }
 
