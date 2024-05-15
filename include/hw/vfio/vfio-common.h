@@ -109,6 +109,7 @@ typedef struct VFIODevice {
     char *name;
     DeviceState *dev;
     int fd;
+    int tsm_bound_fd;
     bool tsm_private_dma;
     int type;
     bool reset_works;
@@ -261,4 +262,6 @@ int vfio_device_get_name(VFIODevice *vbasedev, Error **errp);
 void vfio_device_set_fd(VFIODevice *vbasedev, const char *str, Error **errp);
 void vfio_device_init(VFIODevice *vbasedev, int type, VFIODeviceOps *ops,
                       DeviceState *dev, bool ram_discard);
+int vfio_tee_io_bind(VFIODevice *vbasedev, int32_t guest_id);
+
 #endif /* HW_VFIO_VFIO_COMMON_H */

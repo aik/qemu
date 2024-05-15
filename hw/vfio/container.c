@@ -851,6 +851,7 @@ static int vfio_get_device(VFIOGroup *group, const char *name,
     }
 
     vbasedev->fd = fd;
+    vbasedev->tsm_bound_fd = -1;
     vbasedev->group = group;
     QLIST_INSERT_HEAD(&group->device_list, vbasedev, next);
 
@@ -873,6 +874,9 @@ static void vfio_put_base_device(VFIODevice *vbasedev)
     QLIST_REMOVE(vbasedev, next);
     vbasedev->group = NULL;
     trace_vfio_put_base_device(vbasedev->fd);
+    if (vbasedev->tsm_bound_fd >= 0) {
+        close(vbasedev->tsm_bound_fd);
+    }
     close(vbasedev->fd);
 }
 
@@ -1152,3 +1156,26 @@ static const TypeInfo types[] = {
 };
 
 DEFINE_TYPES(types)
+
+int vfio_tee_io_bind(VFIODevice *vbasedev, int32_t guest_rid)
+{
+    /* KVM need to be set for the VFIO IOMMU group for the below to succeed */
+    int rc;
+
+    struct vfio_device_tsm_bind param = {
+        .argsz = sizeof(param),
+        .flags = 0,
+        .guest_rid = guest_rid,
+    };
+
+    printf("+++Q+++ (%u) %s %u\n", getpid(), __func__, __LINE__);
+    rc = ioctl(vbasedev->fd, VFIO_DEVICE_TSM_BIND, &param);
+    if (rc < 0) {
+        error_report("vfio: failed to bind TEE IO dev %X fd=%d to CoCo VM: %s",
+                     param.guest_rid, vbasedev->fd, strerror(errno));
+        return rc;
+    }
+    vbasedev->tsm_bound_fd = rc;
+    trace_vfio_tee_io_bind(vbasedev->name, vbasedev->fd, vbasedev->tsm_bound_fd);
+    return 0;
+}

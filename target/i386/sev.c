@@ -1907,6 +1907,30 @@ out_unmap:
     return 0;
 }
 
+static int kvm_handle_vmgexit_tio_req(__u32 guest_rid)
+{
+    PCIDevice *pdev = NULL;
+    PCIETIOIfClass *tiok;
+    Object *tioko;
+    int ret;
+
+    ret = pci_qdev_find_device_by_pciid(0 /* Domain */, PCI_BUS_NUM(guest_rid),
+                                        PCI_BDF_TO_DEVFN(guest_rid), &pdev);
+    if (ret) {
+        printf("+++Q+++ (%u) %s %u: BDFn %x not found\n", getpid(), __func__, __LINE__, guest_rid);
+        return ret;
+    }
+
+    tioko = object_dynamic_cast(OBJECT(pdev), INTERFACE_PCIE_TIO_DEVICE);
+    if (!tioko) {
+        printf("+++Q+++ (%u) %s %u: TIO not supported\n", getpid(), __func__, __LINE__);
+        return -EPERM;
+    }
+    tiok = PCIE_TIO_DEVICE_GET_CLASS(tioko);
+
+    return tiok->bind(pdev, guest_rid);
+}
+
 int kvm_handle_vmgexit(struct kvm_run *run)
 {
     int ret;
@@ -1922,6 +1946,8 @@ int kvm_handle_vmgexit(struct kvm_run *run)
                                            &run->vmgexit.req_certs.data_npages,
                                            &run->vmgexit.req_certs.ret,
                                            &run->vmgexit.req_certs.flags);
+    } else if (run->vmgexit.type == KVM_USER_VMGEXIT_TIO_REQ) {
+        ret = kvm_handle_vmgexit_tio_req(run->vmgexit.tio_req.guest_rid);
     } else {
         warn_report("KVM: unknown vmgexit type: %d", run->vmgexit.type);
         ret = -1;

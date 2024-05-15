@@ -2124,6 +2124,16 @@ static void vfio_check_pm_reset(VFIOPCIDevice *vdev, uint8_t pos)
     }
 }
 
+static void vfio_check_pcie_tee_io(VFIOPCIDevice *vdev, uint8_t pos)
+{
+    uint32_t cap = pci_get_long(vdev->pdev.config + pos + PCI_EXP_DEVCAP);
+
+    if (cap & PCI_EXP_DEVCAP_TEE_IO) {
+        trace_vfio_check_pcie_tee_io(vdev->vbasedev.name);
+        vdev->has_tee_io = true;
+    }
+}
+
 static void vfio_check_af_flr(VFIOPCIDevice *vdev, uint8_t pos)
 {
     uint8_t cap = pci_get_byte(vdev->pdev.config + pos + PCI_AF_CAP);
@@ -2188,6 +2198,7 @@ static int vfio_add_std_cap(VFIOPCIDevice *vdev, uint8_t pos, Error **errp)
         break;
     case PCI_CAP_ID_EXP:
         vfio_check_pcie_flr(vdev, pos);
+        vfio_check_pcie_tee_io(vdev, pos);
         ret = vfio_setup_pcie_cap(vdev, pos, size, errp);
         break;
     case PCI_CAP_ID_MSIX:
@@ -3390,6 +3401,7 @@ static Property vfio_pci_dev_properties[] = {
     DEFINE_PROP_LINK("iommufd", VFIOPCIDevice, vbasedev.iommufd,
                      TYPE_IOMMUFD_BACKEND, IOMMUFDBackend *),
 #endif
+    DEFINE_PROP_BOOL("x-tio-pre", VFIOPCIDevice, tee_io_prebind, false),
     DEFINE_PROP_BOOL("x-tio-pvt", VFIOPCIDevice, vbasedev.tsm_private_dma, false),
     DEFINE_PROP_END_OF_LIST(),
 };
@@ -3401,10 +3413,18 @@ static void vfio_pci_set_fd(Object *obj, const char *str, Error **errp)
 }
 #endif
 
+static int vfio_pci_tio_bind(PCIDevice *pdev, int32_t guest_rid)
+{
+    VFIOPCIDevice *vdev = VFIO_PCI(pdev);
+
+    return vfio_tee_io_bind(&vdev->vbasedev, guest_rid);
+}
+
 static void vfio_pci_dev_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *pdc = PCI_DEVICE_CLASS(klass);
+    PCIETIOIfClass *tioc = PCIE_TIO_DEVICE_CLASS(klass);
 
     dc->reset = vfio_pci_reset;
     device_class_set_props(dc, vfio_pci_dev_properties);
@@ -3417,6 +3437,7 @@ static void vfio_pci_dev_class_init(ObjectClass *klass, void *data)
     pdc->exit = vfio_exitfn;
     pdc->config_read = vfio_pci_read_config;
     pdc->config_write = vfio_pci_write_config;
+    tioc->bind = vfio_pci_tio_bind;
 }
 
 static const TypeInfo vfio_pci_dev_info = {
@@ -3429,6 +3450,7 @@ static const TypeInfo vfio_pci_dev_info = {
     .interfaces = (InterfaceInfo[]) {
         { INTERFACE_PCIE_DEVICE },
         { INTERFACE_CONVENTIONAL_PCI_DEVICE },
+        { INTERFACE_PCIE_TIO_DEVICE },
         { }
     },
 };
