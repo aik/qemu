@@ -29,6 +29,10 @@ OBJECT_DECLARE_TYPE(ConfidentialGuestSupport,
                     ConfidentialGuestSupportClass,
                     CONFIDENTIAL_GUEST_SUPPORT)
 
+#define DISCARD_BOTH 0
+#define DISCARD_SHARED 1
+#define DISCARD_PRIVATE 2
+#define DISCARD_NONE 3
 
 struct ConfidentialGuestSupport {
     Object parent;
@@ -61,6 +65,7 @@ struct ConfidentialGuestSupport {
      * so 'ready' is not set, we'll abort.
      */
     bool ready;
+    int discard;
 };
 
 typedef struct ConfidentialGuestSupportClass {
