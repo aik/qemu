@@ -32,6 +32,7 @@ struct HostMemoryBackendMemfd {
     bool hugetlb;
     uint64_t hugetlbsize;
     bool seal;
+    bool discard_shared;
 
     unsigned long *discard_bitmap;
     int64_t discard_bitmap_size;
@@ -221,10 +222,11 @@ static int
 memfd_notify_discard_cb(MemoryRegionSection *s, void *arg)
 {
     RamDiscardListener *rdl = arg;
+    int ret;
 
-    rdl->notify_discard(rdl, s);
+    ret = rdl->notify_discard(rdl, s);
 
-    return 0;
+    return ret;
 }
 
 static int
@@ -353,7 +355,8 @@ memfd_rdm_replay_discarded(const RamDiscardManager *rdm,
 static void
 memfd_rdm_register_listener(RamDiscardManager *rdm,
                             RamDiscardListener *rdl,
-                            MemoryRegionSection *s)
+                            MemoryRegionSection *s,
+                            bool discard_shared)
 {
     HostMemoryBackendMemfd *m = MEMORY_BACKEND_MEMFD(rdm);
     int ret;
@@ -363,7 +366,12 @@ memfd_rdm_register_listener(RamDiscardManager *rdm,
     rdl->section = memory_region_section_new_copy(s);
     QLIST_INSERT_HEAD(&m->rdl_list, rdl, next);
 
-    ret = memfd_for_each_populated_range(m, s, rdl, memfd_notify_populate_cb);
+    if (discard_shared) {
+        ret = memfd_for_each_discarded_range(m, s, rdl, memfd_notify_discard_cb);
+        m->discard_shared = true;
+    } else {
+        ret = memfd_for_each_populated_range(m, s, rdl, memfd_notify_populate_cb);
+    }
     if (ret) {
         g_warning("failed to register RAM discard listener: %d", ret);
         return;
@@ -379,8 +387,13 @@ memfd_rdm_unregister_listener(RamDiscardManager *rdm, RamDiscardListener *rdl)
     g_assert(rdl->section->mr ==
              host_memory_backend_get_memory(MEMORY_BACKEND(m)));
 
-    ret = memfd_for_each_populated_range(m, rdl->section, rdl,
-                                         memfd_notify_discard_cb);
+    if (m->discard_shared) {
+        ret = memfd_for_each_discarded_range(m, rdl->section, rdl,
+                                             memfd_notify_populate_cb);
+    } else {
+        ret = memfd_for_each_populated_range(m, rdl->section, rdl,
+                                             memfd_notify_discard_cb);
+    }
     if (ret) {
         g_warning("failed to unregister RAM discard listener: %d", ret);
         return;
@@ -409,7 +422,7 @@ memfd_discard(Object *backend, RAMBlock *rb, uint64_t offset, uint64_t size,
         }
 
         if (shared_to_private) {
-            rdl->notify_discard(rdl, &tmp);
+            ret = rdl->notify_discard(rdl, &tmp);
         } else {
             ret = rdl->notify_populate(rdl, &tmp);
         }
