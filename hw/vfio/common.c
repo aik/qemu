@@ -282,7 +282,7 @@ static void vfio_iommu_map_notify(IOMMUNotifier *n, IOMMUTLBEntry *iotlb)
     VFIOContainerBase *bcontainer = giommu->bcontainer;
     hwaddr iova = iotlb->iova + giommu->iommu_offset;
     void *vaddr;
-    int ret;
+    int ret, memfd = -1;
     Error *local_err = NULL;
 
     trace_vfio_iommu_map_notify(iotlb->perm == IOMMU_NONE ? "UNMAP" : "MAP",
@@ -313,7 +313,7 @@ static void vfio_iommu_map_notify(IOMMUNotifier *n, IOMMUTLBEntry *iotlb)
          */
         ret = vfio_container_dma_map(bcontainer, iova,
                                      iotlb->addr_mask + 1, vaddr,
-                                     read_only);
+                                     read_only, memfd);
         if (ret) {
             error_report("vfio_container_dma_map(%p, 0x%"HWADDR_PRIx", "
                          "0x%"HWADDR_PRIx", %p) = %d (%s)",
@@ -363,7 +363,7 @@ static int vfio_ram_discard_notify_populate(RamDiscardListener *rdl,
                        int128_get64(section->size);
     hwaddr start, next, iova;
     void *vaddr;
-    int ret;
+    int ret, memfd = -1;
 
     /*
      * Map in (aligned within memory region) minimum granularity, so we can
@@ -377,8 +377,13 @@ static int vfio_ram_discard_notify_populate(RamDiscardListener *rdl,
                section->offset_within_address_space;
         vaddr = memory_region_get_ram_ptr(section->mr) + start;
 
+        if (memory_region_has_guest_memfd(section->mr)) {
+            memfd = section->mr->ram_block->guest_memfd;
+            vaddr = (void *) start;
+        }
+
         ret = vfio_container_dma_map(bcontainer, iova, next - start,
-                                     vaddr, section->readonly);
+                                     vaddr, section->readonly, memfd);
         if (ret) {
             /* Rollback */
             vfio_ram_discard_notify_discard(rdl, section);
@@ -575,7 +580,7 @@ static void vfio_listener_region_add(MemoryListener *listener,
     hwaddr iova, end;
     Int128 llend, llsize;
     void *vaddr;
-    int ret;
+    int ret, memfd = -1;
     Error *err = NULL;
 
     if (!vfio_listener_valid_section(section, "region_add")) {
@@ -674,8 +679,13 @@ static void vfio_listener_region_add(MemoryListener *listener,
         }
     }
 
+    if (memory_region_has_guest_memfd(section->mr)) {
+        memfd = section->mr->ram_block->guest_memfd;
+        vaddr = (void *) section->offset_within_region;
+    }
+
     ret = vfio_container_dma_map(bcontainer, iova, int128_get64(llsize),
-                                 vaddr, section->readonly);
+                                 vaddr, section->readonly, memfd);
     if (ret) {
         error_setg(&err, "vfio_container_dma_map(%p, 0x%"HWADDR_PRIx", "
                    "0x%"HWADDR_PRIx", %p) = %d (%s)",
