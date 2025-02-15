@@ -1894,8 +1894,9 @@ static void ram_block_add(RAMBlock *new_block, Error **errp)
             goto out_free;
         }
 
+#define GUEST_MEMFD_FLAG_INIT_MAPPABLE          (1UL << 0)
         new_block->guest_memfd = kvm_create_guest_memfd(new_block->max_length,
-                                                        0, errp);
+                                                        GUEST_MEMFD_FLAG_INIT_MAPPABLE, errp);
         if (new_block->guest_memfd < 0) {
             qemu_mutex_unlock_ramlist();
             goto out_free;
