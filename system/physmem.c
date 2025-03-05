@@ -1469,6 +1469,8 @@ static void *file_ram_alloc(RAMBlock *block,
     qemu_map_flags |= (block->flags & RAM_NORESERVE) ? QEMU_MAP_NORESERVE : 0;
     qemu_map_flags |= (block->flags & RAM_GUEST_MEMFD) ? QEMU_MAP_SHARED : 0;
     area = qemu_ram_mmap(fd, memory, block->mr->align, qemu_map_flags, offset);
+    g_warning("%s: fd %d offset %lx qemu_map_flags %x align %ld area %p",
+              __func__, fd, offset, qemu_map_flags, block->mr->align, area);
     if (area == MAP_FAILED) {
         error_setg_errno(errp, errno,
                          "unable to map backing store for guest RAM");
@@ -2045,6 +2047,10 @@ RAMBlock *qemu_ram_alloc_from_fd(ram_addr_t size, ram_addr_t max_size,
     if (ram_flags & RAM_GUEST_MEMFD) {
         g_assert(new_block->guest_memfd >= 0);
         g_warning("%s: allocating RAM for guest_memfd %d", __func__, new_block->guest_memfd);
+
+        /* Not clear where this is normally handled. Needed for KVM to use huge mappings */
+        new_block->mr->align = QEMU_VMALLOC_ALIGN;
+
         new_block->host = file_ram_alloc(new_block, max_size, new_block->guest_memfd,
                                          file_size < offset + max_size,
                                          offset, errp);
