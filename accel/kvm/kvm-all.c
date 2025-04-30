@@ -613,7 +613,13 @@ static int kvm_mem_flags(MemoryRegion *mr)
     }
     if (memory_region_has_guest_memfd(mr)) {
         assert(kvm_guest_memfd_supported);
-        flags |= KVM_MEM_GUEST_MEMFD;
+
+        if (mr->ram_device) {
+            printf("+++Q+++ (%u) %s %u: VFIO DMABUF %s\n", getpid(), __func__, __LINE__, mr->name);
+            flags |= KVM_MEM_VFIO_DMABUF;
+        } else {
+            flags |= KVM_MEM_GUEST_MEMFD;
+        }
     }
     return flags;
 }
